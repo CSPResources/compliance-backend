@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import pg from 'pg';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -8,9 +9,12 @@ import cookieParser from 'cookie-parser';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-import cors from 'cors';
 app.use(cors({
-  origin: ['https://cspresources.com', 'https://www.cspresources.com'],
+  origin: [
+    'https://cspresources.com',
+    'https://www.cspresources.com',
+    'http://localhost:3000'
+  ],
   credentials: true
 }));
 app.use(express.json());

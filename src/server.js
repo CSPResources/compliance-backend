@@ -13,6 +13,7 @@ app.use(cors({
   origin: [
     'https://cspresources.com',
     'https://www.cspresources.com',
+    'https://website-6m1d.onrender.com',
     'http://localhost:3000'
   ],
   credentials: true

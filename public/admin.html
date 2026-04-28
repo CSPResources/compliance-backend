@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Driver Compliance</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', sans-serif; background: #f4f5f7; min-height: 100vh; display: flex; }
+
+  .sidebar { width: 180px; background: #fff; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; padding: 20px 0; position: fixed; top: 0; left: 0; bottom: 0; }
+  .sidebar-section { padding: 8px 16px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; margin-top: 8px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 13px; font-weight: 500; color: #4b5563; cursor: pointer; border-left: 3px solid transparent; text-decoration: none; transition: all 0.15s; }
+  .sidebar-item:hover { background: #f9fafb; color: #4f148c; }
+  .sidebar-item.active { background: #f3e8ff; color: #4f148c; border-left-color: #4f148c; font-weight: 600; }
+  .sidebar-item .icon { font-size: 15px; width: 18px; text-align: center; }
+  .sidebar-bottom { margin-top: auto; border-top: 1px solid #e5e7eb; padding-top: 8px; }
+
+  .main { margin-left: 180px; flex: 1; }
+  .page-header { background: #4f148c; color: white; padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; }
+  .page-header h1 { font-size: 22px; font-weight: 700; }
+  .page-header p { font-size: 13px; opacity: 0.8; margin-top: 4px; }
+  .content { padding: 28px 32px; }
+
+  .section-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; margin-bottom: 24px; }
+  .section-header { padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e5e7eb; }
+  .section-header h2 { font-size: 16px; font-weight: 700; color: #111827; }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: 'Inter', sans-serif; cursor: pointer; border: none; transition: all 0.15s; }
+  .btn-primary { background: #4f148c; color: white; }
+  .btn-primary:hover { background: #3b0f6e; }
+  .btn-danger { background: #fee2e2; color: #dc2626; }
+  .btn-danger:hover { background: #fca5a5; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { padding: 11px 20px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #6b7280; background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+  tbody tr { border-bottom: 1px solid #f3f4f6; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody td { padding: 13px 20px; vertical-align: middle; }
+
+  .role-badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+  .role-badge.admin { background: #f3e8ff; color: #4f148c; }
+  .role-badge.staff { background: #dbeafe; color: #1d4ed8; }
+  .role-badge.client { background: #dcfce7; color: #16a34a; }
+
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .status-dot.active { background: #16a34a; }
+  .status-dot.inactive { background: #dc2626; }
+
+  /* Modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; display: flex; align-items: center; justify-content: center; display: none; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: #fff; border-radius: 12px; padding: 28px; width: 100%; max-width: 440px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+  .modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 20px; color: #111827; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 5px; }
+  .field input, .field select { width: 100%; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; font-family: 'Inter', sans-serif; outline: none; }
+  .field input:focus, .field select:focus { border-color: #4f148c; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+  .error-msg { background: #fee2e2; border: 1px solid #fca5a5; border-radius: 6px; padding: 8px 12px; font-size: 12px; color: #dc2626; margin-bottom: 12px; display: none; }
+  .error-msg.show { display: block; }
+  .client-field { display: none; }
+  .client-field.show { display: block; }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-section">Admin</div>
+  <a class="sidebar-item active" href="/admin"><span class="icon">👥</span> User Management</a>
+  <a class="sidebar-item" href="/"><span class="icon">✅</span> Compliance Dashboard</a>
+  <div class="sidebar-bottom">
+    <a class="sidebar-item" href="#" onclick="logout()"><span class="icon">🚪</span> Log Out</a>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="page-header">
+    <div>
+      <h1>User Management</h1>
+      <p>Create and manage staff and client accounts</p>
+    </div>
+    <button class="btn btn-primary" onclick="openModal()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4)">+ Add User</button>
+  </div>
+
+  <div class="content">
+    <div class="section-card">
+      <div class="section-header">
+        <h2>All Users</h2>
+        <button class="btn btn-primary btn-sm" onclick="openModal()">+ Add User</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Client</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody">
+          <tr><td colspan="7" style="text-align:center;padding:32px;color:#9ca3af">Loading users…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit User Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">Add New User</h3>
+    <div class="error-msg" id="modal-error"></div>
+    <div class="field">
+      <label>Full Name</label>
+      <input type="text" id="f-fullname" placeholder="e.g. John Smith">
+    </div>
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="f-username" placeholder="e.g. jsmith">
+    </div>
+    <div class="field">
+      <label>Password <span id="pw-hint" style="font-weight:400;color:#9ca3af">(leave blank to keep existing)</span></label>
+      <input type="password" id="f-password" placeholder="Enter password">
+    </div>
+    <div class="field">
+      <label>Role</label>
+      <select id="f-role" onchange="toggleClientField()">
+        <option value="staff">Staff</option>
+        <option value="client">Client</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <div class="field client-field" id="client-field">
+      <label>Client Name <span style="font-weight:400;color:#9ca3af">(must match report name exactly)</span></label>
+      <input type="text" id="f-clientname" placeholder="e.g. Account 00474">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" style="background:#f3f4f6;color:#374151" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUser()">Save User</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let editingId = null;
+
+async function checkAuth() {
+  const res = await fetch('/api/auth/me');
+  if (!res.ok) window.location.href = '/login';
+}
+
+async function loadUsers() {
+  const res = await fetch('/api/users');
+  if (!res.ok) { window.location.href = '/login'; return; }
+  const users = await res.json();
+  const tbody = document.getElementById('users-tbody');
+
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:#9ca3af">No users yet.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td style="font-weight:600;color:#111827">${u.full_name || '—'}</td>
+      <td style="font-family:monospace;font-size:12px">${u.username}</td>
+      <td><span class="role-badge ${u.role}">${u.role}</span></td>
+      <td style="font-size:12px;color:#6b7280">${u.client_name || '—'}</td>
+      <td><span class="status-dot ${u.active ? 'active' : 'inactive'}"></span>${u.active ? 'Active' : 'Disabled'}</td>
+      <td style="font-size:12px;color:#9ca3af">${new Date(u.created_at).toLocaleDateString()}</td>
+      <td style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="background:#f3e8ff;color:#4f148c" onclick="editUser(${JSON.stringify(u).replace(/"/g, '&quot;')})">Edit</button>
+        ${u.active ? `<button class="btn btn-sm btn-danger" onclick="disableUser(${u.id})">Disable</button>` : `<button class="btn btn-sm" style="background:#dcfce7;color:#16a34a" onclick="enableUser(${u.id})">Enable</button>`}
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openModal(reset = true) {
+  if (reset) {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Add New User';
+    document.getElementById('f-fullname').value = '';
+    document.getElementById('f-username').value = '';
+    document.getElementById('f-password').value = '';
+    document.getElementById('f-role').value = 'staff';
+    document.getElementById('f-clientname').value = '';
+    document.getElementById('f-username').disabled = false;
+    document.getElementById('pw-hint').style.display = 'none';
+    toggleClientField();
+  }
+  document.getElementById('modal-error').classList.remove('show');
+  document.getElementById('modal').classList.add('show');
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('show'); }
+
+function toggleClientField() {
+  const role = document.getElementById('f-role').value;
+  document.getElementById('client-field').classList.toggle('show', role === 'client');
+}
+
+function editUser(u) {
+  editingId = u.id;
+  document.getElementById('modal-title').textContent = 'Edit User';
+  document.getElementById('f-fullname').value = u.full_name || '';
+  document.getElementById('f-username').value = u.username;
+  document.getElementById('f-username').disabled = true;
+  document.getElementById('f-password').value = '';
+  document.getElementById('f-role').value = u.role;
+  document.getElementById('f-clientname').value = u.client_name || '';
+  document.getElementById('pw-hint').style.display = 'inline';
+  toggleClientField();
+  openModal(false);
+}
+
+async function saveUser() {
+  const fullName = document.getElementById('f-fullname').value.trim();
+  const username = document.getElementById('f-username').value.trim();
+  const password = document.getElementById('f-password').value;
+  const role = document.getElementById('f-role').value;
+  const clientName = document.getElementById('f-clientname').value.trim();
+  const errorEl = document.getElementById('modal-error');
+
+  if (!editingId && (!username || !password)) { showModalError('Username and password are required.'); return; }
+  if (role === 'client' && !clientName) { showModalError('Client name is required for client users.'); return; }
+
+  const body = { fullName, role, clientName: role === 'client' ? clientName : null };
+  if (!editingId) { body.username = username; body.password = password; }
+  else if (password) { body.password = password; }
+
+  const res = await fetch(editingId ? `/api/users/${editingId}` : '/api/users', {
+    method: editingId ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  const data = await res.json();
+  if (!res.ok) { showModalError(data.error || 'Failed to save user'); return; }
+
+  closeModal();
+  loadUsers();
+}
+
+function showModalError(msg) {
+  const el = document.getElementById('modal-error');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+async function disableUser(id) {
+  if (!confirm('Disable this user? They will no longer be able to log in.')) return;
+  await fetch(`/api/users/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({active: false}) });
+  loadUsers();
+}
+
+async function enableUser(id) {
+  await fetch(`/api/users/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({active: true}) });
+  loadUsers();
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+}
+
+checkAuth();
+loadUsers();
+</script>
+</body>
+</html>

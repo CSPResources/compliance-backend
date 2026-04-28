@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In — Driver Compliance</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', sans-serif; background: #f4f5f7; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+
+  .login-card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    width: 100%;
+    max-width: 400px;
+    overflow: hidden;
+  }
+
+  .login-header {
+    background: #4f148c;
+    padding: 32px;
+    text-align: center;
+    color: white;
+  }
+
+  .login-header h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .login-header p { font-size: 13px; opacity: 0.8; }
+
+  .login-body { padding: 32px; }
+
+  .field { margin-bottom: 20px; }
+  .field label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+  .field input {
+    width: 100%; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px;
+    font-size: 14px; font-family: 'Inter', sans-serif; color: #111827; outline: none; transition: border-color 0.15s;
+  }
+  .field input:focus { border-color: #4f148c; box-shadow: 0 0 0 3px rgba(79,20,140,0.1); }
+
+  .error-msg { background: #fee2e2; border: 1px solid #fca5a5; border-radius: 6px; padding: 10px 14px; font-size: 13px; color: #dc2626; margin-bottom: 16px; display: none; }
+  .error-msg.show { display: block; }
+
+  .login-btn {
+    width: 100%; padding: 11px; background: #4f148c; color: white; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; font-family: 'Inter', sans-serif;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .login-btn:hover { background: #3b0f6e; }
+  .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .footer { text-align: center; padding: 16px; border-top: 1px solid #f3f4f6; font-size: 12px; color: #9ca3af; }
+</style>
+</head>
+<body>
+<div class="login-card">
+  <div class="login-header">
+    <h1>Driver Compliance Portal</h1>
+    <p>Sign in to access your dashboard</p>
+  </div>
+  <div class="login-body">
+    <div class="error-msg" id="error"></div>
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="username" placeholder="Enter your username" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="Enter your password" autocomplete="current-password">
+    </div>
+    <button class="login-btn" id="login-btn" onclick="login()">Sign In</button>
+  </div>
+  <div class="footer">CSP Resources — Compliance Portal</div>
+</div>
+
+<script>
+  document.getElementById('password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+  async function login() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const btn = document.getElementById('login-btn');
+    const error = document.getElementById('error');
+
+    if (!username || !password) { showError('Please enter your username and password.'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+    error.classList.remove('show');
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+
+      if (!res.ok) { showError(data.error || 'Login failed'); return; }
+
+      // Redirect based on role
+      if (data.role === 'admin') window.location.href = '/admin';
+      else window.location.href = '/';
+
+    } catch (e) {
+      showError('Connection error. Please try again.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error');
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+</script>
+</body>
+</html>

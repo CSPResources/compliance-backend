@@ -1,352 +1,458 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE HTML>
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Compliance Dashboard</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-  <style>
-    .text-csp-purple { color: #4D148C; }
-    .bg-csp-purple { background-color: #4D148C; }
-    .bg-csp-purple-light { background-color: #ede7f6; }
-    .border-csp-purple { border-color: #4D148C; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Driver Compliance</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', sans-serif; background: #f4f5f7; color: #1a1a2e; display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 180px; background: #fff; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; padding: 20px 0; position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; }
+  .sidebar-section { padding: 8px 16px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; margin-top: 8px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 13px; font-weight: 500; color: #4b5563; cursor: pointer; border-left: 3px solid transparent; text-decoration: none; transition: all 0.15s; }
+  .sidebar-item:hover { background: #f9fafb; color: #4f148c; }
+  .sidebar-item.active { background: #f3e8ff; color: #4f148c; border-left-color: #4f148c; font-weight: 600; }
+  .sidebar-item .icon { font-size: 15px; width: 18px; text-align: center; }
+  .sidebar-bottom { margin-top: auto; border-top: 1px solid #e5e7eb; padding-top: 8px; }
+
+  /* Main */
+  .main { margin-left: 180px; flex: 1; display: flex; flex-direction: column; }
+  .page-header { background: #4f148c; color: white; padding: 24px 32px; }
+  .page-header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .page-header p { font-size: 13px; opacity: 0.8; }
+  .content { padding: 28px 32px; flex: 1; }
+
+  /* Summary Cards */
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px 24px; text-align: center; }
+  .card-value { font-size: 32px; font-weight: 700; line-height: 1; margin-bottom: 6px; }
+  .card-value.purple { color: #4f148c; }
+  .card-value.green { color: #16a34a; }
+  .card-value.orange { color: #ea580c; }
+  .card-value.red { color: #dc2626; }
+  .card-label { font-size: 13px; color: #6b7280; font-weight: 500; }
+
+  /* Alert */
+  .alert-banner { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #92400e; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
+  .alert-banner.hidden { display: none; }
+
+  /* Table Card */
+  .table-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; }
+  .table-card-header { padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e5e7eb; flex-wrap: wrap; gap: 12px; }
+  .table-card-header h2 { font-size: 16px; font-weight: 700; color: #111827; }
+  .table-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .search-input { border: 1px solid #d1d5db; border-radius: 6px; padding: 7px 12px; font-size: 13px; font-family: 'Inter', sans-serif; color: #111827; outline: none; width: 220px; transition: border-color 0.15s; }
+  .search-input:focus { border-color: #4f148c; }
+  .filter-select { border: 1px solid #d1d5db; border-radius: 6px; padding: 7px 12px; font-size: 13px; font-family: 'Inter', sans-serif; color: #374151; outline: none; background: #fff; cursor: pointer; }
+
+  /* Table */
+  table.main-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.main-table thead th { padding: 11px 16px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #6b7280; background: #f9fafb; border-bottom: 1px solid #e5e7eb; white-space: nowrap; }
+  table.main-table tbody tr { border-bottom: 1px solid #f3f4f6; cursor: pointer; transition: background 0.1s; }
+  table.main-table tbody tr:hover { background: #faf5ff; }
+  table.main-table tbody tr.expanded { background: #faf5ff; }
+  table.main-table tbody td { padding: 13px 16px; vertical-align: middle; }
+
+  .driver-name { font-weight: 600; color: #111827; font-size: 14px; }
+  .driver-sub { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+
+  .state-tag { display: inline-block; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600; color: #374151; }
+
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+  .badge.active { background: #dcfce7; color: #16a34a; }
+  .badge.inactive, .badge.terminated { background: #fee2e2; color: #dc2626; }
+  .badge.covered { background: #fef9c3; color: #92400e; }
+  .badge.unknown { background: #f3f4f6; color: #6b7280; }
+
+  .check { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; font-size: 12px; font-weight: 700; }
+  .check.ok { background: #dcfce7; color: #16a34a; }
+  .check.fail { background: #fee2e2; color: #dc2626; }
+  .check.warn { background: #fef9c3; color: #92400e; }
+
+  .date-val { font-size: 12px; color: #374151; white-space: nowrap; }
+  .date-val.expiring { color: #ea580c; font-weight: 600; }
+  .date-val.expired { color: #dc2626; font-weight: 600; }
+
+  .progress-wrap { display: flex; align-items: center; gap: 8px; }
+  .progress-bar { flex: 1; height: 6px; background: #e5e7eb; border-radius: 99px; overflow: hidden; min-width: 60px; }
+  .progress-fill { height: 100%; border-radius: 99px; }
+  .progress-fill.green { background: #16a34a; }
+  .progress-fill.orange { background: #ea580c; }
+  .progress-fill.red { background: #dc2626; }
+  .progress-label { font-size: 11px; color: #6b7280; white-space: nowrap; }
+
+  .view-btn { background: #4f148c; color: white; border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; font-weight: 600; font-family: 'Inter', sans-serif; cursor: pointer; }
+  .view-btn:hover { background: #3b0f6e; }
+
+  .expand-arrow { color: #9ca3af; font-size: 11px; transition: transform 0.2s; display: inline-block; }
+  tr.expanded .expand-arrow { transform: rotate(90deg); }
+
+  /* Detail panel */
+  .detail-panel td { padding: 0 16px 16px; background: #faf5ff; }
+  .detail-inner { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .detail-section h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #4f148c; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px solid #f3e8ff; }
+  .detail-item { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #f3f4f6; font-size: 12px; gap: 8px; }
+  .detail-item:last-child { border-bottom: none; }
+  .detail-item .dl { color: #6b7280; white-space: nowrap; }
+  .detail-item .dv { font-weight: 600; color: #111827; text-align: right; }
+  .detail-item .dv.ok { color: #16a34a; }
+  .detail-item .dv.fail { color: #dc2626; }
+  .detail-item .dv.warn { color: #ea580c; }
+
+  .empty { text-align: center; padding: 48px; color: #9ca3af; font-size: 14px; }
+
+  @media (max-width: 900px) {
+    .sidebar { display: none; } .main { margin-left: 0; }
+    .cards { grid-template-columns: repeat(2,1fr); } .content { padding: 16px; }
+    .detail-inner { grid-template-columns: 1fr; }
+  }
+</style>
 </head>
-<body class="bg-gray-100 min-h-screen">
-  <div id="dashboard-root"></div>
+<body>
 
-  <script type="text/babel">
-    const { useState, useEffect, useMemo } = React;
+<aside class="sidebar">
+  <div class="sidebar-section">Management</div>
+  <a class="sidebar-item" href="#"><span class="icon">🚗</span> Driver Processing</a>
+  <div class="sidebar-section">Integrations</div>
+  <a class="sidebar-item active" href="/"><span class="icon">✅</span> Driver Compliance</a>
+  <div id="admin-link" style="display:none">
+    <a class="sidebar-item" href="/admin"><span class="icon">👥</span> User Admin</a>
+  </div>
+  <div class="sidebar-bottom">
+    <div id="user-info" style="padding:10px 16px;font-size:12px;color:#9ca3af;border-bottom:1px solid #e5e7eb;margin-bottom:4px"></div>
+    <a class="sidebar-item" href="#" onclick="logout()"><span class="icon">🚪</span> Log Out</a>
+  </div>
+</aside>
 
-    const API_KEY = window.DASHBOARD_API_KEY || '';
+<div class="main">
+  <div class="page-header">
+    <h1>Driver Compliance</h1>
+    <p>MGB and First Advantage compliance status for your drivers</p>
+  </div>
+  <div class="content">
 
-    function SystemStatus({ isGood, label, details }) {
-      return (
-        <div className="flex items-start gap-2 py-1">
-          <span className={isGood ? "text-emerald-600 font-bold" : "text-rose-600 font-bold"}>
-            {isGood ? "✓" : "✗"}
-          </span>
-          <div>
-            <span className="text-sm text-gray-700">{label}</span>
-            {details && <div className="text-xs text-gray-400">{details}</div>}
-          </div>
+    <div class="cards">
+      <div class="card"><div class="card-value purple" id="c-total">—</div><div class="card-label">Total Drivers</div></div>
+      <div class="card"><div class="card-value green" id="c-active">—</div><div class="card-label">Fully Active</div></div>
+      <div class="card"><div class="card-value orange" id="c-expiring">—</div><div class="card-label">Expiring Soon</div></div>
+      <div class="card"><div class="card-value red" id="c-issues">—</div><div class="card-label">Action Required</div></div>
+    </div>
+
+    <div class="alert-banner hidden" id="alert-banner">
+      ⚠️ <span id="alert-text"></span>
+    </div>
+
+    <div class="table-card">
+      <div class="table-card-header">
+        <h2>Driver Roster</h2>
+        <div class="table-filters">
+          <input class="search-input" type="text" placeholder="Search name or FedEx ID…" id="search" oninput="render()">
+          <select class="filter-select" id="filt" onchange="render()">
+            <option value="all">All Drivers</option>
+            <option value="active">Active Only</option>
+            <option value="issues">Action Required</option>
+          </select>
         </div>
-      );
+      </div>
+      <table class="main-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Driver</th>
+            <th>State</th>
+            <th>MGB Status</th>
+            <th>FADV Status</th>
+            <th>Compliance</th>
+            <th>DOT Expiry</th>
+            <th>Med Card</th>
+            <th>MVR Expiry</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty hidden" id="empty">No drivers match your filters.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Real data extracted from Java app HTML output
+const DRIVERS = [
+  {fn:"Bryant",ln:"Hardesty",state:"IN",fdxId:"5664724",
+   mgb:{fedexId:"5664724",siteId:"101",dotState:"IN",dotExp:"02/19/2029",name:"HARDESTY,BRYANT JAMES",company:"120",domStation:"00474",assocStation:"00474",workforceStatus:"Active",sigExp:"03/31/2026",driverStatus:"Inactive",mvrExp:"07/10/2026",medExp:"02/13/2027",cdas:"Terminated"},
+   fadv:{fedexId:"",faId:"",name:"",dotId:"",dotState:"",jobStatus:"",jobTitle:"",mvrExp:"",medExp:"",certExp:""}},
+
+  {fn:"Donald",ln:"Parker",state:"TX",fdxId:"5564562",
+   mgb:{fedexId:"5564562",siteId:"71",dotState:"TX",dotExp:"08/06/2032",name:"PARKER,DONALD RAYBON",company:"120",domStation:"00474",assocStation:"00474",workforceStatus:"Active",sigExp:"03/31/2027",driverStatus:"Active",mvrExp:"11/03/2026",medExp:"10/30/2026",cdas:"Active"},
+   fadv:{fedexId:"5564562",faId:"2131840",name:"PARKER DONALD RAYBON",dotId:"09229440",dotState:"TX",jobStatus:"Covered(Apr 13, 2023)",jobTitle:"Linehaul",mvrExp:"11/03/2026",medExp:"10/30/2026",certExp:""}},
+
+  {fn:"James",ln:"Gregory",state:"IN",fdxId:"8099241",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"",faId:"",name:"",dotId:"",dotState:"",jobStatus:"",jobTitle:"",mvrExp:"",medExp:"",certExp:""}},
+
+  {fn:"Luis",ln:"Valladares",state:"TX",fdxId:"5564573",
+   mgb:{fedexId:"5564573",siteId:"72",dotState:"TX",dotExp:"01/26/2031",name:"VALLADARES,LUIS",company:"120",domStation:"00758",assocStation:"00474",workforceStatus:"Active",sigExp:"03/31/2027",driverStatus:"Active",mvrExp:"11/04/2026",medExp:"10/30/2026",cdas:"Active"},
+   fadv:{fedexId:"",faId:"",name:"",dotId:"",dotState:"",jobStatus:"",jobTitle:"",mvrExp:"",medExp:"",certExp:""}},
+
+  {fn:"Mark",ln:"Pike",state:"NV",fdxId:"5431704",
+   mgb:{fedexId:"5431704",siteId:"37",dotState:"NV",dotExp:"03/26/2030",name:"PIKE,MARK CHRISTOPHER JR",company:"120",domStation:"00890",assocStation:"00522",workforceStatus:"Active",sigExp:"03/31/2027",driverStatus:"Active",mvrExp:"01/09/2027",medExp:"11/26/2027",cdas:"Active"},
+   fadv:{fedexId:"",faId:"",name:"",dotId:"",dotState:"",jobStatus:"",jobTitle:"",mvrExp:"",medExp:"",certExp:""}},
+
+  {fn:"Robert",ln:"Scharf",state:"FL",fdxId:"8604170",
+   mgb:{fedexId:"8604170",siteId:"326",dotState:"FL",dotExp:"07/02/2027",name:"SCHARF,ROBERT JAMES",company:"120",domStation:"00474",assocStation:"00461",workforceStatus:"Active",sigExp:"03/31/2027",driverStatus:"Active",mvrExp:"10/27/2026",medExp:"10/30/2026",cdas:"Active"},
+   fadv:{fedexId:"8604170",faId:"1652881",name:"SCHARF ROBERT JAMES",dotId:"S610770972420",dotState:"FL",jobStatus:"Covered(Apr 28, 2021)",jobTitle:"Linehaul",mvrExp:"10/27/2026",medExp:"10/30/2026",certExp:""}},
+
+  {fn:"Ryan",ln:"Lawshe",state:"FL",fdxId:"8604172",
+   mgb:{fedexId:"8604172",siteId:"329",dotState:"FL",dotExp:"04/17/2029",name:"LAWSHE,RYAN",company:"120",domStation:"00474",assocStation:"00461",workforceStatus:"Active",sigExp:"03/31/2027",driverStatus:"Active",mvrExp:"03/12/2027",medExp:"03/31/2027",cdas:"Active"},
+   fadv:{fedexId:"8604172",faId:"1657503",name:"LAWSHE RYAN",dotId:"L200730971370",dotState:"FL",jobStatus:"Covered(Aug 2, 2021)",jobTitle:"Linehaul",mvrExp:"03/12/2027",medExp:"03/31/2027",certExp:""}},
+
+  {fn:"Sherri",ln:"Little",state:"IN",fdxId:"8074542",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"",faId:"",name:"",dotId:"",dotState:"",jobStatus:"",jobTitle:"",mvrExp:"",medExp:"",certExp:""}},
+
+  {fn:"Alexander",ln:"Goode",state:"IA",fdxId:"5454779",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"5454779",faId:"2089358",name:"GOODE ALEXANDER LAVONTE",dotId:"599AH2937",dotState:"IA",jobStatus:"Covered(Jul 25, 2024)",jobTitle:"Linehaul",mvrExp:"01/20/2027",medExp:"01/19/2028",certExp:""}},
+
+  {fn:"Binja",ln:"Bimule",state:"IA",fdxId:"6076881",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"6076881",faId:"2324642",name:"BIMULE BINJA",dotId:"694AX8804",dotState:"IA",jobStatus:"Covered(Jan 4, 2024)",jobTitle:"Linehaul",mvrExp:"07/09/2026",medExp:"06/23/2027",certExp:""}},
+
+  {fn:"Chuck",ln:"Ward",state:"IA",fdxId:"8630894",
+   mgb:{fedexId:"8630894",siteId:"337",dotState:"IA",dotExp:"11/13/2033",name:"WARD,CHRISTOPHER T",company:"120",domStation:"00522",assocStation:"00474",workforceStatus:"Active",sigExp:"03/31/2027",driverStatus:"Active",mvrExp:"04/21/2027",medExp:"03/30/2028",cdas:"Active"},
+   fadv:{fedexId:"8630894",faId:"1702474",name:"WARD CHRISTOPHER",dotId:"849AZ2488",dotState:"IA",jobStatus:"Covered(Feb 12, 2025)",jobTitle:"Linehaul",mvrExp:"04/21/2027",medExp:"03/30/2028",certExp:"12/31/2999"}},
+
+  {fn:"Coatney",ln:"Cunningham",state:"NC",fdxId:"8321906",
+   mgb:{fedexId:"8321906",siteId:"285",dotState:"NC",dotExp:"05/25/2028",name:"Cunningham,Coatney Charles",company:"120",domStation:"00274",assocStation:"00522",workforceStatus:"Active",sigExp:"03/31/2027",driverStatus:"Active",mvrExp:"04/01/2027",medExp:"12/20/2026",cdas:"Active"},
+   fadv:{fedexId:"",faId:"",name:"",dotId:"",dotState:"",jobStatus:"",jobTitle:"",mvrExp:"",medExp:"",certExp:""}},
+
+  {fn:"Daniel",ln:"Ashley",state:"LA",fdxId:"5553623",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"5553623",faId:"2128051",name:"ASHLEY DANIEL JAMES",dotId:"012414686",dotState:"LA",jobStatus:"Inactive(Feb 3, 2026)",jobTitle:"Linehaul",mvrExp:"04/01/2026",medExp:"09/08/2027",certExp:""}},
+
+  {fn:"David",ln:"Vanspeybroeck",state:"MS",fdxId:"7429885",
+   mgb:{fedexId:"7429885",siteId:"218",dotState:"MO",dotExp:"06/07/2028",name:"vanspeybroeck,david carl",company:"120",domStation:"00522",assocStation:"00522",workforceStatus:"Active",sigExp:"03/31/2027",driverStatus:"Inactive",mvrExp:"07/15/2026",medExp:"05/27/2027",cdas:"Terminated"},
+   fadv:{fedexId:"7429885",faId:"2216779",name:"VANSPEYBROECK DAVID CARL",dotId:"M010028004",dotState:"MO",jobStatus:"Inactive(Mar 24, 2026)",jobTitle:"Linehaul",mvrExp:"07/15/2026",medExp:"05/27/2027",certExp:""}},
+
+  {fn:"Donald",ln:"Rogers",state:"IL",fdxId:"4859825",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"4859825",faId:"1999574",name:"ROGERS DONALD N",dotId:"R26219458039",dotState:"IL",jobStatus:"Covered(Sep 13, 2022)",jobTitle:"Linehaul",mvrExp:"04/02/2027",medExp:"02/09/2028",certExp:"12/31/2999"}},
+
+  {fn:"Gwen",ln:"Kennedy",state:"OK",fdxId:"4857452",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"4857452",faId:"2011896",name:"KENNEDY GWEN LOUISE",dotId:"N083300885",dotState:"OK",jobStatus:"Covered(Sep 23, 2022)",jobTitle:"Linehaul",mvrExp:"04/07/2027",medExp:"03/25/2027",certExp:""}},
+
+  {fn:"James",ln:"Smith",state:"NC",fdxId:"8819289",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"8819289",faId:"1887813",name:"SMITH JAMES ANTHONY",dotId:"000014910619",dotState:"NC",jobStatus:"Covered(Oct 10, 2023)",jobTitle:"Linehaul",mvrExp:"04/01/2027",medExp:"08/06/2026",certExp:""}},
+
+  {fn:"JerMario",ln:"Evans",state:"IN",fdxId:"5922347",
+   mgb:{fedexId:"5922347",siteId:"157",dotState:"IN",dotExp:"10/23/2027",name:"EVANS,JERMARIO MARCELL",company:"120",domStation:"00474",assocStation:"00474",workforceStatus:"Active",sigExp:"03/31/2026",driverStatus:"Inactive",mvrExp:"10/02/2026",medExp:"09/27/2027",cdas:"Terminated"},
+   fadv:{fedexId:"5922347",faId:"2280843",name:"EVANS JERMARIO MARCELL",dotId:"1930142152",dotState:"IN",jobStatus:"Inactive Non Bill(Feb 25, 2026)",jobTitle:"Linehaul",mvrExp:"10/02/2026",medExp:"09/27/2027",certExp:""}},
+
+  {fn:"Jose",ln:"Jurado",state:"IA",fdxId:"5536390",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"5536390",faId:"2122202",name:"JURADO JOSE LUIS",dotId:"976AM9127",dotState:"IA",jobStatus:"Covered(Mar 24, 2023)",jobTitle:"Linehaul",mvrExp:"04/18/2027",medExp:"01/20/2027",certExp:""}},
+
+  {fn:"Joseph",ln:"Williams",state:"TN",fdxId:"8745626",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"",faId:"",name:"",dotId:"",dotState:"",jobStatus:"",jobTitle:"",mvrExp:"",medExp:"",certExp:""}},
+
+  {fn:"Karen",ln:"Ziegler",state:"LA",fdxId:"6415121",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"6415121",faId:"2453654",name:"ZIEGLER KAREN",dotId:"012436570",dotState:"LA",jobStatus:"Covered(Aug 16, 2024)",jobTitle:"Linehaul",mvrExp:"04/01/2027",medExp:"06/12/2026",certExp:""}},
+
+  {fn:"Kito",ln:"Kabagaya",state:"IA",fdxId:"9535767",
+   mgb:{fedexId:"9535767",siteId:"387",dotState:"IA",dotExp:"10/05/2028",name:"KABAGAYA,KITO",company:"120",domStation:"00522",assocStation:"00522",workforceStatus:"Active",sigExp:"03/31/2027",driverStatus:"Active",mvrExp:"09/24/2026",medExp:"03/21/2027",cdas:"Active"},
+   fadv:{fedexId:"9535767",faId:"2713442",name:"KABAGAYA KITO",dotId:"372AR0687",dotState:"IA",jobStatus:"Covered(Sep 28, 2025)",jobTitle:"Linehaul",mvrExp:"09/24/2026",medExp:"03/21/2027",certExp:""}},
+
+  {fn:"Marie",ln:"Ward",state:"IA",fdxId:"8630895",
+   mgb:{fedexId:"8630895",siteId:"338",dotState:"IA",dotExp:"02/12/2033",name:"WARD,MARIE",company:"120",domStation:"00522",assocStation:"00474",workforceStatus:"Active",sigExp:"03/31/2027",driverStatus:"Active",mvrExp:"04/21/2027",medExp:"03/30/2028",cdas:"Active"},
+   fadv:{fedexId:"8630895",faId:"1707185",name:"WARD MARIE",dotId:"849AZ2364",dotState:"IA",jobStatus:"Covered(Oct 6, 2022)",jobTitle:"Linehaul",mvrExp:"04/21/2027",medExp:"03/30/2028",certExp:"12/31/2999"}},
+
+  {fn:"Paul",ln:"Combs",state:"NC",fdxId:"8188599",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"",faId:"",name:"",dotId:"",dotState:"",jobStatus:"",jobTitle:"",mvrExp:"",medExp:"",certExp:""}},
+
+  {fn:"Stephen",ln:"Ziegler",state:"LA",fdxId:"8822229",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"8822229",faId:"1893040",name:"ZIEGLER STEPHEN HAYES",dotId:"012436615",dotState:"LA",jobStatus:"Inactive(Feb 3, 2026)",jobTitle:"Linehaul",mvrExp:"04/01/2026",medExp:"03/19/2027",certExp:""}},
+
+  {fn:"Tara",ln:"Campbell",state:"FL",fdxId:"6177851",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"6177851",faId:"2368001",name:"CAMPBELL TARA",dotId:"C514801719510",dotState:"FL",jobStatus:"Covered(Sep 30, 2024)",jobTitle:"Linehaul",mvrExp:"12/01/2026",medExp:"08/26/2027",certExp:""}},
+
+  {fn:"Wilfred",ln:"Lopez",state:"FL",fdxId:"6074118",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"6074118",faId:"2322937",name:"LOPEZ WILFRED AMADOR",dotId:"L120881723610",dotState:"FL",jobStatus:"Covered(Dec 28, 2023)",jobTitle:"Linehaul",mvrExp:"07/18/2026",medExp:"07/22/2026",certExp:""}},
+
+  {fn:"Zackary",ln:"Kacir",state:"LA",fdxId:"5659191",
+   mgb:{fedexId:"",siteId:"",dotState:"",dotExp:"",name:"",company:"",domStation:"",assocStation:"",workforceStatus:"",sigExp:"",driverStatus:"",mvrExp:"",medExp:"",cdas:""},
+   fadv:{fedexId:"5659191",faId:"2173631",name:"KACIR ZACKARY",dotId:"012234350",dotState:"LA",jobStatus:"Covered(Jun 13, 2023)",jobTitle:"Linehaul",mvrExp:"04/01/2027",medExp:"06/12/2027",certExp:""}}
+];
+
+// Determine if driver has issues
+function hasIssues(d) {
+  const mgbOk = d.mgb.fedexId && d.mgb.driverStatus === 'Active' && d.mgb.cdas === 'Active';
+  const fadvOk = d.fadv.fedexId && !d.fadv.jobStatus.toLowerCase().startsWith('inactive');
+  return !mgbOk || !fadvOk;
+}
+
+// Date helpers
+function parseMDY(s) { if (!s) return null; const p = s.split('/'); return p.length===3 ? new Date(p[2],p[0]-1,p[1]) : null; }
+function fmtDate(s) { const d = parseMDY(s); return d ? d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : (s||'—'); }
+function dateClass(s) {
+  const d = parseMDY(s); if (!d) return '';
+  const now = new Date(), in90 = new Date(now.getTime()+90*864e5);
+  if (d < now) return 'expired'; if (d < in90) return 'expiring'; return '';
+}
+function score(d) {
+  let c=0,p=0;
+  if (d.mgb.fedexId) { c++; if (d.mgb.driverStatus==='Active') p++; }
+  if (d.fadv.fedexId) { c++; if (!d.fadv.jobStatus.toLowerCase().startsWith('inactive')) p++; }
+  if (d.mgb.cdas) { c++; if (d.mgb.cdas==='Active') p++; }
+  return c ? Math.round(p/c*100) : 0;
+}
+function pColor(p) { return p>=80?'green':p>=50?'orange':'red'; }
+function mgbBadgeClass(d) { if (!d.mgb.fedexId) return 'unknown'; return d.mgb.driverStatus==='Active'?'active':'inactive'; }
+function mgbBadgeText(d) { if (!d.mgb.fedexId) return 'Not Found'; return d.mgb.driverStatus||'—'; }
+function fadvBadgeClass(d) {
+  if (!d.fadv.fedexId) return 'unknown';
+  const s = d.fadv.jobStatus.toLowerCase();
+  if (s.startsWith('inactive')) return 'inactive';
+  if (s.startsWith('covered')) return 'covered';
+  return 'active';
+}
+function fadvBadgeText(d) { return d.fadv.fedexId ? (d.fadv.jobStatus||'—') : 'Not Found'; }
+
+// Summary counts
+function initSummary() {
+  const total = DRIVERS.length;
+  const issues = DRIVERS.filter(d => hasIssues(d)).length;
+  const active = total - issues;
+  const now = new Date(), in90 = new Date(now.getTime()+90*864e5);
+  const expiring = DRIVERS.filter(d => {
+    return [d.mgb.dotExp, d.mgb.medExp, d.mgb.mvrExp, d.fadv.mvrExp, d.fadv.medExp].some(s => {
+      const dt = parseMDY(s); return dt && dt > now && dt < in90;
+    });
+  }).length;
+  document.getElementById('c-total').textContent = total;
+  document.getElementById('c-active').textContent = active;
+  document.getElementById('c-expiring').textContent = expiring;
+  document.getElementById('c-issues').textContent = issues;
+  if (issues > 0) {
+    document.getElementById('alert-banner').classList.remove('hidden');
+    document.getElementById('alert-text').textContent = `${issues} driver${issues>1?'s have':' has'} compliance issues requiring immediate attention.`;
+  }
+}
+
+let expandedId = null;
+
+function getFiltered() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const f = document.getElementById('filt').value;
+  return DRIVERS.filter(d => {
+    const matchQ = !q || `${d.fn} ${d.ln}`.toLowerCase().includes(q) || d.fdxId.includes(q);
+    const issues = hasIssues(d);
+    const matchF = f==='all' ? true : f==='active' ? !issues : issues;
+    return matchQ && matchF;
+  });
+}
+
+function render() {
+  const filtered = getFiltered();
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty');
+  if (!filtered.length) { tbody.innerHTML=''; empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+
+  tbody.innerHTML = filtered.map((d,i) => {
+    const id = `d${i}`, isExp = expandedId===id;
+    const pct = score(d), pc = pColor(pct);
+    const medClass = dateClass(d.mgb.medExp||d.fadv.medExp);
+    const dotClass = dateClass(d.mgb.dotExp);
+    const mvrClass = dateClass(d.mgb.mvrExp||d.fadv.mvrExp);
+
+    const row = `<tr class="${isExp?'expanded':''}" onclick="toggle('${id}')">
+      <td><span class="expand-arrow">▶</span></td>
+      <td><div class="driver-name">${d.fn} ${d.ln}</div><div class="driver-sub">FDX ${d.fdxId}</div></td>
+      <td><span class="state-tag">${d.state}</span></td>
+      <td><span class="badge ${mgbBadgeClass(d)}">${mgbBadgeText(d)}</span></td>
+      <td><span class="badge ${fadvBadgeClass(d)}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${fadvBadgeText(d)}</span></td>
+      <td><div class="progress-wrap"><div class="progress-bar"><div class="progress-fill ${pc}" style="width:${pct}%"></div></div><span class="progress-label">${pct}%</span></div></td>
+      <td><span class="date-val ${dotClass}">${fmtDate(d.mgb.dotExp)}</span></td>
+      <td><span class="date-val ${medClass}">${fmtDate(d.mgb.medExp||d.fadv.medExp)}</span></td>
+      <td><span class="date-val ${mvrClass}">${fmtDate(d.mgb.mvrExp||d.fadv.mvrExp)}</span></td>
+      <td><button class="view-btn" onclick="event.stopPropagation();toggle('${id}')">View</button></td>
+    </tr>`;
+
+    const detail = isExp ? `<tr><td colspan="10" style="padding:0 16px 16px;background:#faf5ff">
+      <div class="detail-inner">
+        <div class="detail-section">
+          <h4>MGB / FedEx Data</h4>
+          <div class="detail-item"><span class="dl">Driver Name</span><span class="dv">${d.mgb.name||'—'}</span></div>
+          <div class="detail-item"><span class="dl">FedEx ID</span><span class="dv">${d.mgb.fedexId||'—'}</span></div>
+          <div class="detail-item"><span class="dl">Site ID</span><span class="dv">${d.mgb.siteId||'—'}</span></div>
+          <div class="detail-item"><span class="dl">DOT State</span><span class="dv">${d.mgb.dotState||'—'}</span></div>
+          <div class="detail-item"><span class="dl">DOT Expiry</span><span class="dv ${dotClass}">${fmtDate(d.mgb.dotExp)}</span></div>
+          <div class="detail-item"><span class="dl">Driver Status</span><span class="dv ${d.mgb.driverStatus==='Active'?'ok':d.mgb.driverStatus?'fail':''}">${d.mgb.driverStatus||'—'}</span></div>
+          <div class="detail-item"><span class="dl">CDAS Status</span><span class="dv ${d.mgb.cdas==='Active'?'ok':d.mgb.cdas?'fail':''}">${d.mgb.cdas||'—'}</span></div>
+          <div class="detail-item"><span class="dl">Workforce</span><span class="dv ${d.mgb.workforceStatus==='Active'?'ok':''}">${d.mgb.workforceStatus||'—'}</span></div>
+        </div>
+        <div class="detail-section">
+          <h4>Station Info</h4>
+          <div class="detail-item"><span class="dl">Company</span><span class="dv">${d.mgb.company||'—'}</span></div>
+          <div class="detail-item"><span class="dl">Domicile Station</span><span class="dv">${d.mgb.domStation||'—'}</span></div>
+          <div class="detail-item"><span class="dl">Associated Station</span><span class="dv">${d.mgb.assocStation||'—'}</span></div>
+          <div class="detail-item"><span class="dl">SIG Expiry</span><span class="dv ${dateClass(d.mgb.sigExp)}">${fmtDate(d.mgb.sigExp)}</span></div>
+          <div class="detail-item"><span class="dl">MVR Expiry</span><span class="dv ${mvrClass}">${fmtDate(d.mgb.mvrExp)}</span></div>
+          <div class="detail-item"><span class="dl">Med Card Expiry</span><span class="dv ${medClass}">${fmtDate(d.mgb.medExp)}</span></div>
+        </div>
+        <div class="detail-section">
+          <h4>First Advantage (FADV)</h4>
+          <div class="detail-item"><span class="dl">FA ID</span><span class="dv">${d.fadv.faId||'—'}</span></div>
+          <div class="detail-item"><span class="dl">Full Name</span><span class="dv">${d.fadv.name||'—'}</span></div>
+          <div class="detail-item"><span class="dl">DOT ID</span><span class="dv">${d.fadv.dotId||'—'}</span></div>
+          <div class="detail-item"><span class="dl">DOT State</span><span class="dv">${d.fadv.dotState||'—'}</span></div>
+          <div class="detail-item"><span class="dl">Job Status</span><span class="dv ${fadvBadgeClass(d)==='active'||fadvBadgeClass(d)==='covered'?'warn':'fail'}">${d.fadv.jobStatus||'—'}</span></div>
+          <div class="detail-item"><span class="dl">Job Title</span><span class="dv">${d.fadv.jobTitle||'—'}</span></div>
+          <div class="detail-item"><span class="dl">MVR Expiry</span><span class="dv ${dateClass(d.fadv.mvrExp)}">${fmtDate(d.fadv.mvrExp)}</span></div>
+          <div class="detail-item"><span class="dl">Med Card Expiry</span><span class="dv ${dateClass(d.fadv.medExp)}">${fmtDate(d.fadv.medExp)}</span></div>
+        </div>
+      </div>
+    </td></tr>` : '';
+
+    return row + detail;
+  }).join('');
+}
+
+function toggle(id) { expandedId = expandedId===id ? null : id; render(); }
+
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+}
+
+async function checkAuthAndLoad() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (!res.ok) { window.location.href = '/login'; return; }
+    const user = await res.json();
+    document.getElementById('user-info').textContent = user.fullName || user.username;
+    if (user.role === 'admin' || user.role === 'staff') {
+      document.getElementById('admin-link').style.display = 'block';
     }
+  } catch(e) {}
+  initSummary();
+  render();
+}
 
-    function ComplianceDashboard({ clientName }) {
-      const [reportData, setReportData] = useState(null);
-      const [lastUpdated, setLastUpdated] = useState(null);
-      const [loading, setLoading] = useState(true);
-      const [error, setError] = useState(null);
-      const [expandedDriver, setExpandedDriver] = useState(null);
-      const [searchQuery, setSearchQuery] = useState('');
-      const [statusFilter, setStatusFilter] = useState('all');
-      const [driverTypeFilter, setDriverTypeFilter] = useState('all');
-
-      useEffect(() => {
-        async function fetchData() {
-          try {
-            const res = await fetch(`/api/reports/${encodeURIComponent(clientName)}`, {
-              headers: { 'x-api-key': API_KEY }
-            });
-            if (!res.ok) throw new Error(`Error ${res.status}: ${await res.text()}`);
-            const json = await res.json();
-            setReportData(json.data);
-            setLastUpdated(json.lastUpdated);
-          } catch (err) {
-            setError(err.message);
-          } finally {
-            setLoading(false);
-          }
-        }
-        fetchData();
-      }, [clientName]);
-
-      const drivers = useMemo(() => {
-        if (!reportData) return [];
-        return (reportData.checks || []).map((check, i) => ({
-          id: i,
-          firstName: check.driver?.first_name || '',
-          lastName: check.driver?.last_name || '',
-          fedexId: check.driver?.fedex_id || '',
-          state: check.driver?.state || '',
-          driverType: check.driver?.driver_type || '',
-          checkDate: check.check_date || '',
-          mgbPresent: check.mgb_present,
-          mgbAllGood: check.mgb_present && check.mgb_status_good && check.mgb_id_match && check.mgb_state_match && check.mgb_company_ok && check.mgb_workforce_active && check.mgb_driver_active,
-          mgbIdMatch: check.mgb_id_match,
-          mgbStateMatch: check.mgb_state_match,
-          mgbCompanyOk: check.mgb_company_ok,
-          mgbWorkforceActive: check.mgb_workforce_active,
-          mgbDriverActive: check.mgb_driver_active,
-          fadvPresent: check.fadv_present,
-          fadvAllGood: check.fadv_present && check.fadv_status_good && check.fadv_id_match && check.fadv_state_match && check.fadv_job_active,
-          fadvIdMatch: check.fadv_id_match,
-          fadvStateMatch: check.fadv_state_match,
-          fadvJobActive: check.fadv_job_active,
-          medCardStatus: check.med_card_status,
-          medCardDate: check.med_card_expiration,
-          hasIssues: check.has_issues
-        }));
-      }, [reportData]);
-
-      const filteredData = useMemo(() => {
-        return drivers.filter(d => {
-          const q = searchQuery.toLowerCase();
-          const matchSearch = !q || `${d.firstName} ${d.lastName} ${d.fedexId}`.toLowerCase().includes(q);
-          const matchStatus = statusFilter === 'all' || (statusFilter === 'issues' ? d.hasIssues : !d.hasIssues);
-          const matchType = driverTypeFilter === 'all' || d.driverType === driverTypeFilter;
-          return matchSearch && matchStatus && matchType;
-        });
-      }, [drivers, searchQuery, statusFilter, driverTypeFilter]);
-
-      if (loading) return (
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center">
-            <div className="text-4xl mb-4">⏳</div>
-            <p className="text-gray-600">Loading compliance data...</p>
-          </div>
-        </div>
-      );
-
-      if (error) return (
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center bg-white p-8 rounded-xl shadow-md max-w-md">
-            <div className="text-4xl mb-4">⚠️</div>
-            <h2 className="text-xl font-bold text-gray-800 mb-2">Could not load data</h2>
-            <p className="text-gray-500 text-sm">{error}</p>
-          </div>
-        </div>
-      );
-
-      const cleanCount = drivers.filter(d => !d.hasIssues).length;
-      const issueCount = drivers.filter(d => d.hasIssues).length;
-
-      return (
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="bg-csp-purple text-white rounded-xl p-6 mb-6 shadow-lg">
-            <h1 className="text-2xl font-bold">{clientName}</h1>
-            <p className="text-purple-200 text-sm mt-1">
-              Last updated: {lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Unknown'}
-            </p>
-          </div>
-
-          {/* Summary Cards */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-white rounded-xl shadow-md p-5 text-center">
-              <div className="text-3xl font-bold text-gray-800">{drivers.length}</div>
-              <div className="text-sm text-gray-500 mt-1">Total Drivers</div>
-            </div>
-            <div className="bg-white rounded-xl shadow-md p-5 text-center">
-              <div className="text-3xl font-bold text-emerald-600">{cleanCount}</div>
-              <div className="text-sm text-gray-500 mt-1">Clean</div>
-            </div>
-            <div className="bg-white rounded-xl shadow-md p-5 text-center">
-              <div className="text-3xl font-bold text-rose-600">{issueCount}</div>
-              <div className="text-sm text-gray-500 mt-1">Issues Found</div>
-            </div>
-          </div>
-
-          {/* Filters */}
-          <div className="bg-white rounded-xl shadow-md p-5 mb-6">
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Name or FedEx ID..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg">
-                  <option value="all">All Status</option>
-                  <option value="clean">Clean Only</option>
-                  <option value="issues">Issues Only</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Driver Type</label>
-                <select value={driverTypeFilter} onChange={e => setDriverTypeFilter(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg">
-                  <option value="all">All Types</option>
-                  <option value="linehaul">Linehaul</option>
-                  <option value="p&d">P&D</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Drivers Table */}
-          <div className="bg-white rounded-xl shadow-md overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Drivers {filteredData.length !== drivers.length && `(${filteredData.length} of ${drivers.length})`}
-              </h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="w-8"></th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Driver</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">FedEx ID</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">State</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">MGB</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">FADV</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredData.map(driver => (
-                    <React.Fragment key={driver.id}>
-                      <tr onClick={() => setExpandedDriver(expandedDriver === driver.id ? null : driver.id)}
-                        className="hover:bg-gray-50 cursor-pointer transition">
-                        <td className="px-3 py-4 text-gray-400">{expandedDriver === driver.id ? '▼' : '▶'}</td>
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{driver.firstName} {driver.lastName}</td>
-                        <td className="px-6 py-4 text-sm font-mono text-gray-900">{driver.fedexId}</td>
-                        <td className="px-6 py-4 text-sm text-gray-900">{driver.state}</td>
-                        <td className="px-6 py-4">
-                          <span className="px-3 py-1 text-xs font-semibold rounded-full bg-csp-purple-light text-csp-purple">
-                            {driver.driverType === 'linehaul' ? 'Linehaul' : 'P&D'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          {driver.mgbPresent ? (
-                            <span className={driver.mgbAllGood ? "text-emerald-600 text-xl" : "text-rose-600 text-xl"}>
-                              {driver.mgbAllGood ? "✓" : "✗"}
-                            </span>
-                          ) : <span className="text-gray-400 text-sm">N/A</span>}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          {driver.fadvPresent ? (
-                            <span className={driver.fadvAllGood ? "text-emerald-600 text-xl" : "text-rose-600 text-xl"}>
-                              {driver.fadvAllGood ? "✓" : "✗"}
-                            </span>
-                          ) : <span className="text-gray-400 text-sm">N/A</span>}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <span className={`px-3 py-1 text-xs font-semibold rounded-full ${driver.hasIssues ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                            {driver.hasIssues ? 'Issues' : 'Clean'}
-                          </span>
-                        </td>
-                      </tr>
-                      {expandedDriver === driver.id && (
-                        <tr>
-                          <td colSpan="8" className="px-6 py-6 bg-gray-50">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
-                                <h3 className="text-md font-bold text-csp-purple mb-4">My Ground Biz (MGB)</h3>
-                                {driver.mgbPresent ? (
-                                  <div className="space-y-1">
-                                    <SystemStatus isGood={driver.mgbIdMatch} label={`ID Match: ${driver.fedexId}`} />
-                                    <SystemStatus isGood={driver.mgbStateMatch} label={`State: ${driver.state}`} />
-                                    <SystemStatus isGood={driver.mgbCompanyOk} label="Company Active" />
-                                    <SystemStatus isGood={driver.mgbWorkforceActive} label="Workforce Active" />
-                                    <SystemStatus isGood={driver.mgbDriverActive} label="Driver Active" />
-                                  </div>
-                                ) : <p className="text-sm text-gray-500">Driver not found in MGB</p>}
-                              </div>
-                              <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
-                                <h3 className="text-md font-bold text-csp-purple mb-4">First Advantage (FADV)</h3>
-                                {driver.fadvPresent ? (
-                                  <div className="space-y-1">
-                                    <SystemStatus isGood={driver.fadvIdMatch} label={`ID Match: ${driver.fedexId}`} />
-                                    <SystemStatus isGood={driver.fadvStateMatch} label={`State: ${driver.state}`} />
-                                    <SystemStatus isGood={driver.fadvJobActive} label="Job Active" />
-                                    {driver.medCardStatus && driver.medCardStatus !== 'n/a' && (
-                                      <SystemStatus isGood={driver.medCardStatus === 'valid'}
-                                        label={`Medical Card: ${driver.medCardStatus}`}
-                                        details={driver.medCardDate ? `Expires: ${driver.medCardDate}` : null} />
-                                    )}
-                                  </div>
-                                ) : <p className="text-sm text-gray-500">Driver not found in FADV</p>}
-                              </div>
-                            </div>
-                            <p className="mt-4 text-xs text-gray-400">Last checked: {driver.checkDate}</p>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
-              {filteredData.length === 0 && (
-                <div className="text-center py-12 text-gray-500">No drivers found matching your filters.</div>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Simple client selector if no client is specified
-    function App() {
-      const [clients, setClients] = useState(null);
-      const [selectedClient, setSelectedClient] = useState(null);
-      const [loadingClients, setLoadingClients] = useState(true);
-
-      useEffect(() => {
-        async function fetchClients() {
-          try {
-            const res = await fetch('/api/clients', { headers: { 'x-api-key': API_KEY } });
-            const data = await res.json();
-            setClients(data);
-            if (data.length === 1) setSelectedClient(data[0].client_name);
-          } catch (e) {
-            setClients([]);
-          } finally {
-            setLoadingClients(false);
-          }
-        }
-        fetchClients();
-      }, []);
-
-      if (loadingClients) return (
-        <div className="flex items-center justify-center h-screen">
-          <p className="text-gray-500">Loading...</p>
-        </div>
-      );
-
-      if (!selectedClient) return (
-        <div className="flex items-center justify-center h-screen">
-          <div className="bg-white rounded-xl shadow-md p-8 max-w-md w-full">
-            <div className="bg-csp-purple text-white text-center py-4 rounded-lg mb-6">
-              <h1 className="text-xl font-bold">Compliance Dashboard</h1>
-            </div>
-            {clients && clients.length > 0 ? (
-              <>
-                <p className="text-gray-600 mb-4 text-sm">Select a client to view their report:</p>
-                {clients.map(c => (
-                  <button key={c.client_name}
-                    onClick={() => setSelectedClient(c.client_name)}
-                    className="w-full text-left px-4 py-3 mb-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
-                    <div className="font-medium text-gray-800">{c.client_name}</div>
-                    <div className="text-xs text-gray-400">Last updated: {new Date(c.created_at).toLocaleString()}</div>
-                  </button>
-                ))}
-              </>
-            ) : (
-              <p className="text-center text-gray-500">No reports available yet.</p>
-            )}
-          </div>
-        </div>
-      );
-
-      return <ComplianceDashboard clientName={selectedClient} />;
-    }
-
-    ReactDOM.render(<App />, document.getElementById('dashboard-root'));
-  </script>
+checkAuthAndLoad();
+</script>
 </body>
 </html>

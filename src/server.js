@@ -8,6 +8,11 @@ import cookieParser from 'cookie-parser';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+import cors from 'cors';
+app.use(cors({
+  origin: ['https://cspresources.com', 'https://www.cspresources.com'],
+  credentials: true
+}));
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, '../public')));

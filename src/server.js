@@ -339,6 +339,9 @@ async function parseXlsxFromBuffer(buffer) {
   }
   const fedexIdIndices = headers.reduce((acc,h,i) => { if(h.toLowerCase()==='fedex id') acc.push(i); return acc; }, []);
   const dotStateIndices = headers.reduce((acc,h,i) => { if(h.toLowerCase()==='dot state') acc.push(i); return acc; }, []);
+  // Find the CDAS column to determine where FADV section starts
+  const cdasIdx = findCol(['cdas']);
+  
   const cols = {
     firstName: findCol(['first name']), lastName: findCol(['last name']),
     state: findCol(['state']), fdxId: findCol(['fdx id']),
@@ -348,12 +351,18 @@ async function parseXlsxFromBuffer(buffer) {
     domStation: findCol(['domicile station']), assocStation: findCol(['associated station']),
     workforceStatus: findCol(['workforce']), sigExp: findCol(['sig expiration','sig exp']),
     driverStatus: findCol(['driver status']), mvrExp: findCol(['mvr expiration']),
-    medExp: findCol(['med card','mec exp']), cdas: findCol(['cdas']),
-    faFedexId: fedexIdIndices[1] ?? -1, faId: findCol(['fa id']),
-    faName: findCol(['full name']), dotId: findCol(['dot id']),
-    fadvDotState: dotStateIndices[1] ?? -1, jobStatus: findCol(['job status']),
-    jobTitle: findCol(['job title']), fadvMvr: findCol(['fec mvr']),
-    fadvMec: findCol(['fec mec']), fadvCert: findCol(['fec training','cert'])
+    medExp: findCol(['med card','mec exp']), cdas: cdasIdx,
+    // FADV columns come after CDAS
+    faFedexId: fedexIdIndices[1] ?? -1,
+    faId: headers.findIndex((h,i) => i > cdasIdx && h.toLowerCase().includes('fa id')),
+    faName: headers.findIndex((h,i) => i > cdasIdx && h.toLowerCase().includes('full name')),
+    dotId: headers.findIndex((h,i) => i > cdasIdx && h.toLowerCase().includes('dot id')),
+    fadvDotState: dotStateIndices[1] ?? -1,
+    jobStatus: headers.findIndex((h,i) => i > cdasIdx && h.toLowerCase().includes('job status')),
+    jobTitle: headers.findIndex((h,i) => i > cdasIdx && h.toLowerCase().includes('job title')),
+    fadvMvr: headers.findIndex((h,i) => i > cdasIdx && h.toLowerCase().includes('fec mvr')),
+    fadvMec: headers.findIndex((h,i) => i > cdasIdx && h.toLowerCase().includes('fec mec')),
+    fadvCert: headers.findIndex((h,i) => i > cdasIdx && (h.toLowerCase().includes('fec training') || h.toLowerCase().includes('cert')))
   };
   const drivers = allRows.slice(1).map(row => ({
     fn: getCell(row,cols.firstName), ln: getCell(row,cols.lastName),

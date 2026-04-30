@@ -104,7 +104,7 @@ app.post('/api/auth/login', async (req, res) => {
     { expiresIn: '8h' }
   );
 
-  res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'strict', maxAge: 8 * 60 * 60 * 1000 });
+  res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'none', maxAge: 8 * 60 * 60 * 1000 });
   res.json({ role: user.role, username: user.username, fullName: user.full_name, clientName: user.client_name });
 });
 

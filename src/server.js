@@ -339,7 +339,7 @@ async function parseXlsxFromBuffer(buffer) {
   }
   const fedexIdIndices = headers.reduce((acc,h,i) => { if(h.toLowerCase()==='fedex id') acc.push(i); return acc; }, []);
   const dotStateIndices = headers.reduce((acc,h,i) => { if(h.toLowerCase()==='dot state') acc.push(i); return acc; }, []);
-  // Use exact column indices based on known file structure
+  // Hardcoded exact column indices from known file structure:
   // 0:First Name, 1:Last Name, 2:State, 3:FDX ID, 4:FedEx ID, 5:FedEx Site ID
   // 6:DOT State, 7:DOT Expiration, 8:Driver Name, 9:Company
   // 10:Domicile Station ID, 11:Associated Station ID, 12:Workforce Doc Status
@@ -347,37 +347,15 @@ async function parseXlsxFromBuffer(buffer) {
   // 16:Med Card Expiration Date, 17:CDAS Status
   // 18:FedEx ID(FADV), 19:FA ID, 20:Full Name, 21:DOT ID, 22:DOT State(FADV)
   // 23:Job Status, 24:Job Title, 25:FEC MVR expires, 26:FEC MEC expires, 27:FEC Training CERT expires
-
-  // Try to detect columns dynamically first, fall back to known indices
   const cols = {
-    firstName: findCol(['first name']) !== -1 ? findCol(['first name']) : 0,
-    lastName: findCol(['last name']) !== -1 ? findCol(['last name']) : 1,
-    state: findCol(['state']) !== -1 ? findCol(['state']) : 2,
-    fdxId: findCol(['fdx id']) !== -1 ? findCol(['fdx id']) : 3,
-    fedexId: fedexIdIndices[0] !== undefined ? fedexIdIndices[0] : 4,
-    fedexSiteId: findCol(['fedex site','site id']) !== -1 ? findCol(['fedex site','site id']) : 5,
-    dotState: dotStateIndices[0] !== undefined ? dotStateIndices[0] : 6,
-    dotExp: findCol(['dot expiration','dot exp']) !== -1 ? findCol(['dot expiration','dot exp']) : 7,
-    driverName: findCol(['driver name']) !== -1 ? findCol(['driver name']) : 8,
-    company: findCol(['company']) !== -1 ? findCol(['company']) : 9,
-    domStation: findCol(['domicile station']) !== -1 ? findCol(['domicile station']) : 10,
-    assocStation: findCol(['associated station']) !== -1 ? findCol(['associated station']) : 11,
-    workforceStatus: findCol(['workforce']) !== -1 ? findCol(['workforce']) : 12,
-    sigExp: findCol(['sig expiration','sig exp']) !== -1 ? findCol(['sig expiration','sig exp']) : 13,
-    driverStatus: findCol(['driver status']) !== -1 ? findCol(['driver status']) : 14,
-    mvrExp: findCol(['mvr expiration']) !== -1 ? findCol(['mvr expiration']) : 15,
-    medExp: findCol(['med card','mec exp']) !== -1 ? findCol(['med card','mec exp']) : 16,
-    cdas: findCol(['cdas']) !== -1 ? findCol(['cdas']) : 17,
-    faFedexId: fedexIdIndices[1] !== undefined ? fedexIdIndices[1] : 18,
-    faId: findCol(['fa id']) !== -1 ? findCol(['fa id']) : 19,
-    faName: findCol(['full name']) !== -1 ? findCol(['full name']) : 20,
-    dotId: findCol(['dot id']) !== -1 ? findCol(['dot id']) : 21,
-    fadvDotState: dotStateIndices[1] !== undefined ? dotStateIndices[1] : 22,
-    jobStatus: findCol(['job status']) !== -1 ? findCol(['job status']) : 23,
-    jobTitle: findCol(['job title']) !== -1 ? findCol(['job title']) : 24,
-    fadvMvr: findCol(['fec mvr']) !== -1 ? findCol(['fec mvr']) : 25,
-    fadvMec: findCol(['fec mec']) !== -1 ? findCol(['fec mec']) : 26,
-    fadvCert: findCol(['fec training','cert']) !== -1 ? findCol(['fec training','cert']) : 27
+    firstName: 0, lastName: 1, state: 2, fdxId: 3,
+    fedexId: 4, fedexSiteId: 5, dotState: 6, dotExp: 7,
+    driverName: 8, company: 9, domStation: 10, assocStation: 11,
+    workforceStatus: 12, sigExp: 13, driverStatus: 14, mvrExp: 15,
+    medExp: 16, cdas: 17,
+    faFedexId: 18, faId: 19, faName: 20, dotId: 21,
+    fadvDotState: 22, jobStatus: 23, jobTitle: 24,
+    fadvMvr: 25, fadvMec: 26, fadvCert: 27
   };
   const drivers = allRows.slice(1).map(row => ({
     fn: getCell(row,cols.firstName), ln: getCell(row,cols.lastName),

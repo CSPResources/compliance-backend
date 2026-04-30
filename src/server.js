@@ -227,6 +227,360 @@ app.get('/api/reports/:clientName', requireAuth(['admin', 'staff', 'client']), a
   res.json({ client: req.params.clientName, data: result.rows[0].data, lastUpdated: result.rows[0].created_at });
 });
 
+// ── Dispatch File Parse ───────────────────────────────────────────────────────
+import multer from 'multer';
+import { Readable } from 'stream';
+import AdmZip from 'adm-zip';
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+app.post('/api/dispatch/parse', requireAuth(['admin', 'staff', 'client']), upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const zip = new AdmZip(req.file.buffer);
+
+    // Parse shared strings
+    const stringsXml = zip.getEntry('xl/sharedStrings.xml');
+    const sheetXml = zip.getEntry('xl/worksheets/sheet1.xml');
+    if (!sheetXml) return res.status(400).json({ error: 'Invalid xlsx file' });
+
+    // Simple XML text extraction
+    function extractTexts(xml) {
+      const matches = [...xml.matchAll(/<t[^>]*>([^<]*)<\/t>/g)];
+      return matches.map(m => m[1]);
+    }
+
+    function extractCells(xml) {
+      const rows = [...xml.matchAll(/<row[^>]*>(.*?)<\/row>/gs)];
+      return rows.map(row => {
+        const cells = [...row[1].matchAll(/<c\s([^>]*)>(.*?)<\/c>/gs)];
+        return cells.map(cell => {
+          const attrs = cell[1];
+          const inner = cell[2];
+          const t = (attrs.match(/t="([^"]*)"/) || [])[1];
+          const v = (inner.match(/<v>([^<]*)<\/v>/) || [])[1];
+          return { t, v };
+        });
+      });
+    }
+
+    const shared = stringsXml ? extractTexts(stringsXml.getData().toString('utf8')) : [];
+    const sheetData = sheetXml.getData().toString('utf8');
+    const allRows = extractCells(sheetData);
+
+    if (allRows.length < 2) return res.status(400).json({ error: 'No data rows found' });
+
+    // First row = headers
+    const headers = allRows[0].map(c => {
+      if (c.t === 's' && c.v !== undefined) return shared[parseInt(c.v)] || '';
+      return c.v || '';
+    });
+
+    // Find column indices
+    const fdxIdx = headers.findIndex(h => h.toLowerCase().includes('fdx') || h.toLowerCase().includes('fedex'));
+    const firstIdx = headers.findIndex(h => h.toLowerCase().includes('first'));
+    const lastIdx = headers.findIndex(h => h.toLowerCase().includes('last'));
+    const statusIdx = headers.findIndex(h => h.toLowerCase().includes('status'));
+
+    const drivers = allRows.slice(1).map(row => {
+      function getCell(idx) {
+        if (idx < 0 || idx >= row.length) return '';
+        const c = row[idx];
+        if (!c || c.v === undefined) return '';
+        if (c.t === 's') return shared[parseInt(c.v)] || '';
+        return c.v || '';
+      }
+      return {
+        fdxId: getCell(fdxIdx),
+        firstName: getCell(firstIdx),
+        lastName: getCell(lastIdx),
+        status: getCell(statusIdx)
+      };
+    }).filter(d => d.fdxId || d.firstName || d.lastName);
+
+    res.json({ drivers, headers, count: drivers.length });
+  } catch (err) {
+    console.error('Dispatch parse error:', err);
+    res.status(500).json({ error: 'Failed to parse file: ' + err.message });
+  }
+});
+
+
+// ── Compliance Auto-Fetch from Tomcat ────────────────────────────────────────
+async function parseXlsxFromBuffer(buffer) {
+  const AdmZip = (await import('adm-zip')).default;
+  const zip = new AdmZip(buffer);
+  function extractTexts(xml) {
+    return [...xml.matchAll(/<t[^>]*>([^<]*)<\/t>/g)].map(m => m[1]);
+  }
+  function extractCells(xml) {
+    return [...xml.matchAll(/<row[^>]*>(.*?)<\/row>/gs)].map(row =>
+      [...row[1].matchAll(/<c\s([^>]*)>(.*?)<\/c>/gs)].map(cell => ({
+        t: (cell[1].match(/t="([^"]*)"/) || [])[1],
+        v: (cell[2].match(/<v>([^<]*)<\/v>/) || [])[1]
+      }))
+    );
+  }
+  const stringsEntry = zip.getEntry('xl/sharedStrings.xml');
+  const sheetEntry = zip.getEntry('xl/worksheets/sheet1.xml');
+  if (!sheetEntry) throw new Error('Invalid xlsx format');
+  const shared = stringsEntry ? extractTexts(stringsEntry.getData().toString('utf8')) : [];
+  const allRows = extractCells(sheetEntry.getData().toString('utf8'));
+  if (allRows.length < 2) throw new Error('No data rows found');
+  const headers = allRows[0].map(c => c.t === 's' && c.v !== undefined ? (shared[parseInt(c.v)] || '') : (c.v || ''));
+  function getCell(row, idx) {
+    if (idx < 0 || idx >= row.length) return '';
+    const c = row[idx]; if (!c || c.v === undefined) return '';
+    return c.t === 's' ? (shared[parseInt(c.v)] || '') : (c.v || '');
+  }
+  function findCol(keywords) {
+    return headers.findIndex(h => keywords.some(k => h.toLowerCase().includes(k.toLowerCase())));
+  }
+  const fedexIdIndices = headers.reduce((acc,h,i) => { if(h.toLowerCase()==='fedex id') acc.push(i); return acc; }, []);
+  const dotStateIndices = headers.reduce((acc,h,i) => { if(h.toLowerCase()==='dot state') acc.push(i); return acc; }, []);
+  const cols = {
+    firstName: findCol(['first name']), lastName: findCol(['last name']),
+    state: findCol(['state']), fdxId: findCol(['fdx id']),
+    fedexId: fedexIdIndices[0] ?? -1, fedexSiteId: findCol(['fedex site','site id']),
+    dotState: dotStateIndices[0] ?? -1, dotExp: findCol(['dot expiration','dot exp']),
+    driverName: findCol(['driver name']), company: findCol(['company']),
+    domStation: findCol(['domicile station']), assocStation: findCol(['associated station']),
+    workforceStatus: findCol(['workforce']), sigExp: findCol(['sig expiration','sig exp']),
+    driverStatus: findCol(['driver status']), mvrExp: findCol(['mvr expiration']),
+    medExp: findCol(['med card','mec exp']), cdas: findCol(['cdas']),
+    faFedexId: fedexIdIndices[1] ?? -1, faId: findCol(['fa id']),
+    faName: findCol(['full name']), dotId: findCol(['dot id']),
+    fadvDotState: dotStateIndices[1] ?? -1, jobStatus: findCol(['job status']),
+    jobTitle: findCol(['job title']), fadvMvr: findCol(['fec mvr']),
+    fadvMec: findCol(['fec mec']), fadvCert: findCol(['fec training','cert'])
+  };
+  const drivers = allRows.slice(1).map(row => ({
+    fn: getCell(row,cols.firstName), ln: getCell(row,cols.lastName),
+    state: getCell(row,cols.state), fdxId: getCell(row,cols.fdxId),
+    mgb: {
+      fedexId: getCell(row,cols.fedexId), siteId: getCell(row,cols.fedexSiteId),
+      dotState: getCell(row,cols.dotState), dotExp: getCell(row,cols.dotExp),
+      name: getCell(row,cols.driverName), company: getCell(row,cols.company),
+      domStation: getCell(row,cols.domStation), assocStation: getCell(row,cols.assocStation),
+      workforceStatus: getCell(row,cols.workforceStatus), sigExp: getCell(row,cols.sigExp),
+      driverStatus: getCell(row,cols.driverStatus), mvrExp: getCell(row,cols.mvrExp),
+      medExp: getCell(row,cols.medExp), cdas: getCell(row,cols.cdas)
+    },
+    fadv: {
+      fedexId: getCell(row,cols.faFedexId), faId: getCell(row,cols.faId),
+      name: getCell(row,cols.faName), dotId: getCell(row,cols.dotId),
+      dotState: getCell(row,cols.fadvDotState), jobStatus: getCell(row,cols.jobStatus),
+      jobTitle: getCell(row,cols.jobTitle), mvrExp: getCell(row,cols.fadvMvr),
+      medExp: getCell(row,cols.fadvMec), certExp: getCell(row,cols.fadvCert)
+    }
+  })).filter(d => d.fdxId || d.fn || d.ln);
+  return { drivers };
+}
+
+async function fetchLatestXlsx(account, partial=false) {
+  const listRes = await fetch(TOMCAT_BASE + '/dispatch/');
+  if (!listRes.ok) throw new Error('Could not reach file server');
+  const html = await listRes.text();
+  const fileMatches = [...html.matchAll(/href="([^"]*\.xlsx)"/g)];
+  const allFiles = fileMatches.map(m => m[1].replace(/.*\//, ''));
+  const filtered = allFiles.filter(f => {
+    const upperF = f.toUpperCase();
+    const upperA = account.toUpperCase();
+    if (!upperF.startsWith(upperA)) return false;
+    if (partial) return f.includes('partial');
+    return !f.includes('partial') && !f.includes('error');
+  }).sort().reverse();
+  if (!filtered.length) throw new Error('No files found for account ' + account);
+  return filtered[0];
+}
+
+// GET /api/compliance/accounts
+app.get('/api/compliance/accounts', requireAuth(['admin','staff']), async (req, res) => {
+  try {
+    const listRes = await fetch(TOMCAT_BASE + '/dispatch/');
+    if (!listRes.ok) throw new Error('Could not reach file server');
+    const html = await listRes.text();
+    const files = [...html.matchAll(/href="([^"]*\.xlsx)"/g)]
+      .map(m => m[1].replace(/.*\//, ''))
+      .filter(f => !f.includes('partial') && !f.includes('error'));
+    const accounts = {};
+    files.forEach(f => {
+      const acct = f.match(/^(\d+[A-Z]+)/)?.[1];
+      if (acct && (!accounts[acct] || f > accounts[acct])) accounts[acct] = f;
+    });
+    res.json(Object.entries(accounts).map(([account, filename]) => ({
+      account, filename, lastUpdated: filename.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || 'Unknown'
+    })));
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/compliance/auto/:accountNumber
+app.get('/api/compliance/auto/:accountNumber', requireAuth(['admin','staff','client']), async (req, res) => {
+  const account = req.params.accountNumber.toUpperCase();
+  if (req.user.role === 'client') {
+    const userAcct = (req.user.clientName||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    if (!account.includes(userAcct) && !userAcct.includes(account))
+      return res.status(403).json({ error: 'Access denied' });
+  }
+  try {
+    const latestFile = await fetchLatestXlsx(account, false);
+    const fileRes = await fetch(TOMCAT_BASE + '/dispatch/' + latestFile);
+    if (!fileRes.ok) throw new Error('Could not fetch file');
+    const buffer = Buffer.from(await fileRes.arrayBuffer());
+    const { drivers } = await parseXlsxFromBuffer(buffer);
+    const lastUpdated = latestFile.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || 'Unknown';
+    res.json({ account, filename: latestFile, lastUpdated, drivers, count: drivers.length });
+  } catch(err) {
+    console.error('Compliance auto-fetch error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Dispatch Auto-Fetch ───────────────────────────────────────────────────────
+const TOMCAT_BASE = 'https://tomcat-j018.onrender.com';
+
+// GET /api/dispatch/:accountNumber — fetch latest partial file for account
+app.get('/api/dispatch/:accountNumber', requireAuth(['admin', 'staff', 'client']), async (req, res) => {
+  const account = req.params.accountNumber.toUpperCase();
+
+  // Clients can only see their own account
+  if (req.user.role === 'client') {
+    const userAccount = (req.user.clientName || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!account.includes(userAccount) && !userAccount.includes(account)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+  }
+
+  try {
+    // Fetch directory listing from Tomcat
+    const listRes = await fetch(`${TOMCAT_BASE}/dispatch/`);
+    if (!listRes.ok) throw new Error('Could not reach dispatch server');
+    const html = await listRes.text();
+
+    // Parse filenames from directory listing
+    const fileMatches = [...html.matchAll(/href="([^"]*partial\.xlsx)"/g)];
+    const allFiles = fileMatches.map(m => m[1].replace(/.*\//, ''));
+
+    // Filter to this account and sort by date (newest first)
+    const accountFiles = allFiles
+      .filter(f => f.toUpperCase().startsWith(account))
+      .sort()
+      .reverse();
+
+    if (accountFiles.length === 0) {
+      return res.status(404).json({ error: `No dispatch files found for account ${account}` });
+    }
+
+    const latestFile = accountFiles[0];
+    console.log(`Fetching dispatch file: ${latestFile}`);
+
+    // Fetch the actual xlsx file
+    const fileRes = await fetch(`${TOMCAT_BASE}/dispatch/${latestFile}`);
+    if (!fileRes.ok) throw new Error('Could not fetch file');
+    const buffer = Buffer.from(await fileRes.arrayBuffer());
+
+    // Parse xlsx using AdmZip
+    const AdmZip = (await import('adm-zip')).default;
+    const zip = new AdmZip(buffer);
+
+    function extractTexts(xml) {
+      const matches = [...xml.matchAll(/<t[^>]*>([^<]*)<\/t>/g)];
+      return matches.map(m => m[1]);
+    }
+
+    function extractCells(xml) {
+      const rows = [...xml.matchAll(/<row[^>]*>(.*?)<\/row>/gs)];
+      return rows.map(row => {
+        const cells = [...row[1].matchAll(/<c\s([^>]*)>(.*?)<\/c>/gs)];
+        return cells.map(cell => {
+          const attrs = cell[1];
+          const inner = cell[2];
+          const t = (attrs.match(/t="([^"]*)"/) || [])[1];
+          const v = (inner.match(/<v>([^<]*)<\/v>/) || [])[1];
+          return { t, v };
+        });
+      });
+    }
+
+    const stringsEntry = zip.getEntry('xl/sharedStrings.xml');
+    const sheetEntry = zip.getEntry('xl/worksheets/sheet1.xml');
+    if (!sheetEntry) throw new Error('Invalid xlsx format');
+
+    const shared = stringsEntry ? extractTexts(stringsEntry.getData().toString('utf8')) : [];
+    const sheetData = sheetEntry.getData().toString('utf8');
+    const allRows = extractCells(sheetData);
+
+    if (allRows.length < 2) return res.status(400).json({ error: 'No data in file' });
+
+    const headers = allRows[0].map(c => {
+      if (c.t === 's' && c.v !== undefined) return shared[parseInt(c.v)] || '';
+      return c.v || '';
+    });
+
+    const fdxIdx = headers.findIndex(h => h.toLowerCase().includes('fdx') || h.toLowerCase().includes('fedex'));
+    const firstIdx = headers.findIndex(h => h.toLowerCase().includes('first'));
+    const lastIdx = headers.findIndex(h => h.toLowerCase().includes('last'));
+    const statusIdx = headers.findIndex(h => h.toLowerCase().includes('status'));
+
+    const drivers = allRows.slice(1).map(row => {
+      function getCell(idx) {
+        if (idx < 0 || idx >= row.length) return '';
+        const c = row[idx];
+        if (!c || c.v === undefined) return '';
+        if (c.t === 's') return shared[parseInt(c.v)] || '';
+        return c.v || '';
+      }
+      return {
+        fdxId: getCell(fdxIdx),
+        firstName: getCell(firstIdx),
+        lastName: getCell(lastIdx),
+        status: getCell(statusIdx)
+      };
+    }).filter(d => d.fdxId || d.firstName || d.lastName);
+
+    res.json({
+      account,
+      filename: latestFile,
+      lastUpdated: latestFile.match(/\d{4}-\d{2}-\d{2}/)?.[0] || 'Unknown',
+      drivers,
+      count: drivers.length
+    });
+
+  } catch (err) {
+    console.error('Dispatch auto-fetch error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/dispatch — list all available accounts (staff/admin only)
+app.get('/api/dispatch', requireAuth(['admin', 'staff']), async (req, res) => {
+  try {
+    const listRes = await fetch(`${TOMCAT_BASE}/dispatch/`);
+    if (!listRes.ok) throw new Error('Could not reach dispatch server');
+    const html = await listRes.text();
+    const fileMatches = [...html.matchAll(/href="([^"]*partial\.xlsx)"/g)];
+    const allFiles = fileMatches.map(m => m[1].replace(/.*\//, ''));
+
+    // Group by account number and get latest per account
+    const accounts = {};
+    allFiles.forEach(f => {
+      const acct = f.match(/^(\w+)\d{4}/)?.[1];
+      if (acct) {
+        if (!accounts[acct] || f > accounts[acct]) accounts[acct] = f;
+      }
+    });
+
+    res.json(Object.entries(accounts).map(([account, filename]) => ({
+      account,
+      filename,
+      lastUpdated: filename.match(/\d{4}-\d{2}-\d{2}/)?.[0] || 'Unknown'
+    })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Pages ─────────────────────────────────────────────────────────────────────
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, '../public/login.html')));
 app.get('/admin', requireAuth(['admin']), (req, res) => res.sendFile(path.join(__dirname, '../public/admin.html')));

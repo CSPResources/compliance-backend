@@ -229,8 +229,7 @@ app.get('/api/reports/:clientName', requireAuth(['admin', 'staff', 'client']), a
 
 // ── Dispatch File Parse ───────────────────────────────────────────────────────
 import multer from 'multer';
-import { Readable } from 'stream';
-import AdmZip from 'adm-zip';
+import fflate from 'fflate';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -238,11 +237,9 @@ app.post('/api/dispatch/parse', requireAuth(['admin', 'staff', 'client']), uploa
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    const zip = new AdmZip(req.file.buffer);
-
-    // Parse shared strings
-    const stringsXml = zip.getEntry('xl/sharedStrings.xml');
-    const sheetXml = zip.getEntry('xl/worksheets/sheet1.xml');
+    const zipU = fflate.unzipSync(new Uint8Array(req.file.buffer));
+    const stringsXml = zipU['xl/sharedStrings.xml'];
+    const sheetXml = zipU['xl/worksheets/sheet1.xml'];
     if (!sheetXml) return res.status(400).json({ error: 'Invalid xlsx file' });
 
     // Simple XML text extraction
@@ -265,8 +262,8 @@ app.post('/api/dispatch/parse', requireAuth(['admin', 'staff', 'client']), uploa
       });
     }
 
-    const shared = stringsXml ? extractTexts(stringsXml.getData().toString('utf8')) : [];
-    const sheetData = sheetXml.getData().toString('utf8');
+    const shared = stringsXml ? extractTexts(Buffer.from(stringsXml).toString('utf8')) : [];
+    const sheetData = Buffer.from(sheetXml).toString('utf8');
     const allRows = extractCells(sheetData);
 
     if (allRows.length < 2) return res.status(400).json({ error: 'No data rows found' });
@@ -309,7 +306,7 @@ app.post('/api/dispatch/parse', requireAuth(['admin', 'staff', 'client']), uploa
 
 // ── Compliance Auto-Fetch from Tomcat ────────────────────────────────────────
 async function parseXlsxFromBuffer(buffer) {
-  const zip = new AdmZip(buffer);
+  const zipData = fflate.unzipSync(new Uint8Array(buffer));
   function extractTexts(xml) {
     return [...xml.matchAll(/<t[^>]*>([^<]*)<\/t>/g)].map(m => m[1]);
   }
@@ -321,11 +318,11 @@ async function parseXlsxFromBuffer(buffer) {
       }))
     );
   }
-  const stringsEntry = zip.getEntry('xl/sharedStrings.xml');
-  const sheetEntry = zip.getEntry('xl/worksheets/sheet1.xml');
-  if (!sheetEntry) throw new Error('Invalid xlsx format');
-  const shared = stringsEntry ? extractTexts(stringsEntry.getData().toString('utf8')) : [];
-  const allRows = extractCells(sheetEntry.getData().toString('utf8'));
+  const strEntry = zipData['xl/sharedStrings.xml'];
+  const shtEntry = zipData['xl/worksheets/sheet1.xml'];
+  if (!shtEntry) throw new Error('Invalid xlsx format');
+  const shared = strEntry ? extractTexts(Buffer.from(strEntry).toString('utf8')) : [];
+  const allRows = extractCells(Buffer.from(shtEntry).toString('utf8'));
   if (allRows.length < 2) throw new Error('No data rows found');
   const headers = allRows[0].map(c => c.t === 's' && c.v !== undefined ? (shared[parseInt(c.v)] || '') : (c.v || ''));
   function getCell(row, idx) {
@@ -473,8 +470,7 @@ app.get('/api/dispatch/:accountNumber', requireAuth(['admin', 'staff', 'client']
     if (!fileRes.ok) throw new Error('Could not fetch file');
     const buffer = Buffer.from(await fileRes.arrayBuffer());
 
-    // Parse xlsx using AdmZip
-    const zip = new AdmZip(buffer);
+    const zipData4 = fflate.unzipSync(new Uint8Array(buffer));
 
     function extractTexts(xml) {
       const matches = [...xml.matchAll(/<t[^>]*>([^<]*)<\/t>/g)];
@@ -495,12 +491,11 @@ app.get('/api/dispatch/:accountNumber', requireAuth(['admin', 'staff', 'client']
       });
     }
 
-    const stringsEntry = zip.getEntry('xl/sharedStrings.xml');
-    const sheetEntry = zip.getEntry('xl/worksheets/sheet1.xml');
+    // already handled above
     if (!sheetEntry) throw new Error('Invalid xlsx format');
 
-    const shared = stringsEntry ? extractTexts(stringsEntry.getData().toString('utf8')) : [];
-    const sheetData = sheetEntry.getData().toString('utf8');
+    const shared = stringsEntry ? extractTexts(stringsEntry) : [];
+    const sheetData = sheetEntry;
     const allRows = extractCells(sheetData);
 
     if (allRows.length < 2) return res.status(400).json({ error: 'No data in file' });

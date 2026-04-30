@@ -229,7 +229,7 @@ app.get('/api/reports/:clientName', requireAuth(['admin', 'staff', 'client']), a
 
 // ── Dispatch File Parse ───────────────────────────────────────────────────────
 import multer from 'multer';
-import fflate from 'fflate';
+import * as fflate from 'fflate';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 

@@ -341,7 +341,15 @@ async function parseXlsxFromBuffer(buffer) {
   const dotStateIndices = headers.reduce((acc,h,i) => { if(h.toLowerCase()==='dot state') acc.push(i); return acc; }, []);
   // Find the CDAS column to determine where FADV section starts
   const cdasIdx = findCol(['cdas']);
-  
+
+  // Helper to find column after a certain index
+  function findColAfter(keywords, afterIdx) {
+    for (let i = afterIdx + 1; i < headers.length; i++) {
+      if (keywords.some(k => headers[i].toLowerCase().includes(k.toLowerCase()))) return i;
+    }
+    return -1;
+  }
+
   const cols = {
     firstName: findCol(['first name']), lastName: findCol(['last name']),
     state: findCol(['state']), fdxId: findCol(['fdx id']),
@@ -354,15 +362,15 @@ async function parseXlsxFromBuffer(buffer) {
     medExp: findCol(['med card','mec exp']), cdas: cdasIdx,
     // FADV columns come after CDAS
     faFedexId: fedexIdIndices[1] ?? -1,
-    faId: headers.findIndex((h,i) => i > cdasIdx && h.toLowerCase().includes('fa id')),
-    faName: headers.findIndex((h,i) => i > cdasIdx && h.toLowerCase().includes('full name')),
-    dotId: headers.findIndex((h,i) => i > cdasIdx && h.toLowerCase().includes('dot id')),
+    faId: findColAfter(['fa id'], cdasIdx),
+    faName: findColAfter(['full name'], cdasIdx),
+    dotId: findColAfter(['dot id'], cdasIdx),
     fadvDotState: dotStateIndices[1] ?? -1,
-    jobStatus: headers.findIndex((h,i) => i > cdasIdx && h.toLowerCase().includes('job status')),
-    jobTitle: headers.findIndex((h,i) => i > cdasIdx && h.toLowerCase().includes('job title')),
-    fadvMvr: headers.findIndex((h,i) => i > cdasIdx && h.toLowerCase().includes('fec mvr')),
-    fadvMec: headers.findIndex((h,i) => i > cdasIdx && h.toLowerCase().includes('fec mec')),
-    fadvCert: headers.findIndex((h,i) => i > cdasIdx && (h.toLowerCase().includes('fec training') || h.toLowerCase().includes('cert')))
+    jobStatus: findColAfter(['job status'], cdasIdx),
+    jobTitle: findColAfter(['job title'], cdasIdx),
+    fadvMvr: findColAfter(['fec mvr'], cdasIdx),
+    fadvMec: findColAfter(['fec mec'], cdasIdx),
+    fadvCert: findColAfter(['fec training', 'cert'], cdasIdx)
   };
   const drivers = allRows.slice(1).map(row => ({
     fn: getCell(row,cols.firstName), ln: getCell(row,cols.lastName),

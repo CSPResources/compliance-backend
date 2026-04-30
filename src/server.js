@@ -379,17 +379,15 @@ async function parseXlsxFromBuffer(buffer) {
 }
 
 async function fetchLatestXlsx(account, partial=false) {
-  const listRes = await fetch(TOMCAT_BASE + '/dispatch/');
-  if (!listRes.ok) throw new Error('Could not reach file server');
-  const html = await listRes.text();
-  const fileMatches = [...html.matchAll(/href="([^"]*\.xlsx)"/g)];
-  const allFiles = fileMatches.map(m => m[1].replace(/.*\//, ''));
+  const listRes = await fetch(TOMCAT_BASE + '/dispatch/index.json');
+  if (!listRes.ok) throw new Error('Could not reach file index');
+  const allFiles = await listRes.json();
   const filtered = allFiles.filter(f => {
     const upperF = f.toUpperCase();
     const upperA = account.toUpperCase();
     if (!upperF.startsWith(upperA)) return false;
     if (partial) return f.includes('partial');
-    return !f.includes('partial') && !f.includes('error');
+    return !f.includes('partial') && !f.includes('error') && f.endsWith('.xlsx');
   }).sort().reverse();
   if (!filtered.length) throw new Error('No files found for account ' + account);
   return filtered[0];
@@ -398,12 +396,10 @@ async function fetchLatestXlsx(account, partial=false) {
 // GET /api/compliance/accounts
 app.get('/api/compliance/accounts', requireAuth(['admin','staff']), async (req, res) => {
   try {
-    const listRes = await fetch(TOMCAT_BASE + '/dispatch/');
-    if (!listRes.ok) throw new Error('Could not reach file server');
-    const html = await listRes.text();
-    const files = [...html.matchAll(/href="([^"]*\.xlsx)"/g)]
-      .map(m => m[1].replace(/.*\//, ''))
-      .filter(f => !f.includes('partial') && !f.includes('error'));
+    const listRes = await fetch(TOMCAT_BASE + '/dispatch/index.json');
+    if (!listRes.ok) throw new Error('Could not reach file index');
+    const allFiles = await listRes.json();
+    const files = allFiles.filter(f => !f.includes('partial') && !f.includes('error') && f.endsWith('.xlsx'));
     const accounts = {};
     files.forEach(f => {
       const acct = f.match(/^(\d+[A-Z]+)/)?.[1];
@@ -454,16 +450,12 @@ app.get('/api/dispatch/:accountNumber', requireAuth(['admin', 'staff', 'client']
 
   try {
     // Fetch directory listing from Tomcat
-    const listRes = await fetch(`${TOMCAT_BASE}/dispatch/`);
+    const listRes = await fetch(`${TOMCAT_BASE}/dispatch/index.json`);
     if (!listRes.ok) throw new Error('Could not reach dispatch server');
-    const html = await listRes.text();
-
-    // Parse filenames from directory listing
-    const fileMatches = [...html.matchAll(/href="([^"]*partial\.xlsx)"/g)];
-    const allFiles = fileMatches.map(m => m[1].replace(/.*\//, ''));
+    const allFiles = await listRes.json();
 
     // Filter to this account and sort by date (newest first)
-    const accountFiles = allFiles
+    const accountFiles = allFiles.filter(f => f.includes('partial') && f.endsWith('.xlsx'))
       .filter(f => f.toUpperCase().startsWith(account))
       .sort()
       .reverse();
@@ -556,16 +548,15 @@ app.get('/api/dispatch/:accountNumber', requireAuth(['admin', 'staff', 'client']
 // GET /api/dispatch — list all available accounts (staff/admin only)
 app.get('/api/dispatch', requireAuth(['admin', 'staff']), async (req, res) => {
   try {
-    const listRes = await fetch(`${TOMCAT_BASE}/dispatch/`);
+    const listRes = await fetch(`${TOMCAT_BASE}/dispatch/index.json`);
     if (!listRes.ok) throw new Error('Could not reach dispatch server');
-    const html = await listRes.text();
-    const fileMatches = [...html.matchAll(/href="([^"]*partial\.xlsx)"/g)];
-    const allFiles = fileMatches.map(m => m[1].replace(/.*\//, ''));
+    const allFiles = await listRes.json();
+    const fileMatches = allFiles.filter(f => f.includes('partial') && f.endsWith('.xlsx'));
 
     // Group by account number and get latest per account
     const accounts = {};
-    allFiles.forEach(f => {
-      const acct = f.match(/^(\w+)\d{4}/)?.[1];
+    fileMatches.forEach(f => {
+      const acct = f.match(/^(\d+[A-Z]+)/)?.[1];
       if (acct) {
         if (!accounts[acct] || f > accounts[acct]) accounts[acct] = f;
       }

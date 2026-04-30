@@ -309,7 +309,6 @@ app.post('/api/dispatch/parse', requireAuth(['admin', 'staff', 'client']), uploa
 
 // ── Compliance Auto-Fetch from Tomcat ────────────────────────────────────────
 async function parseXlsxFromBuffer(buffer) {
-  const AdmZip = (await import('adm-zip')).default;
   const zip = new AdmZip(buffer);
   function extractTexts(xml) {
     return [...xml.matchAll(/<t[^>]*>([^<]*)<\/t>/g)].map(m => m[1]);
@@ -426,7 +425,7 @@ app.get('/api/compliance/auto/:accountNumber', requireAuth(['admin','staff','cli
     const fileRes = await fetch(TOMCAT_BASE + '/dispatch/' + latestFile);
     if (!fileRes.ok) throw new Error('Could not fetch file');
     const buffer = Buffer.from(await fileRes.arrayBuffer());
-    const { drivers } = await parseXlsxFromBuffer(buffer);
+    const { drivers } = await parseXlsxFromBuffer(Buffer.from(buffer));
     const lastUpdated = latestFile.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || 'Unknown';
     res.json({ account, filename: latestFile, lastUpdated, drivers, count: drivers.length });
   } catch(err) {
@@ -475,7 +474,6 @@ app.get('/api/dispatch/:accountNumber', requireAuth(['admin', 'staff', 'client']
     const buffer = Buffer.from(await fileRes.arrayBuffer());
 
     // Parse xlsx using AdmZip
-    const AdmZip = (await import('adm-zip')).default;
     const zip = new AdmZip(buffer);
 
     function extractTexts(xml) {

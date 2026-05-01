@@ -384,8 +384,8 @@ async function fetchLatestXlsx(account, partial=false) {
     const upperF = f.toUpperCase();
     const upperA = account.toUpperCase();
     if (!upperF.startsWith(upperA)) return false;
-    if (partial) return f.includes('partial');
-    return !f.includes('partial') && !f.includes('error') && f.endsWith('.xlsx');
+    if (partial) return f.includes('Daily');
+    return !f.includes('Daily') && !f.includes('error') && f.endsWith('.xlsx');
   }).sort().reverse();
   if (!filtered.length) throw new Error('No files found for account ' + account);
   return filtered[0];
@@ -452,79 +452,45 @@ app.get('/api/dispatch/:accountNumber', requireAuth(['admin', 'staff', 'client']
     if (!listRes.ok) throw new Error('Could not reach dispatch server');
     const allFiles = await listRes.json();
 
-    // Filter to this account and sort by date (newest first)
-    const accountFiles = allFiles.filter(f => f.includes('partial') && f.endsWith('.xlsx'))
-      .filter(f => f.toUpperCase().startsWith(account))
-      .sort()
-      .reverse();
+    // Filter to Daily files for this account, newest first
+    const accountFiles = allFiles
+      .filter(f => f.includes('Daily') && f.endsWith('.xlsx') && f.toUpperCase().startsWith(account))
+      .sort().reverse();
 
     if (accountFiles.length === 0) {
-      return res.status(404).json({ error: `No dispatch files found for account ${account}` });
+      return res.status(404).json({ error: `No daily dispatch files found for account ${account}` });
     }
 
     const latestFile = accountFiles[0];
-    console.log(`Fetching dispatch file: ${latestFile}`);
+    console.log(`Fetching daily dispatch file: ${latestFile}`);
 
-    // Fetch the actual xlsx file
     const fileRes = await fetch(`${TOMCAT_BASE}/dispatch/${latestFile}`);
     if (!fileRes.ok) throw new Error('Could not fetch file');
     const buffer = Buffer.from(await fileRes.arrayBuffer());
 
-    const zipData4 = fflate.unzipSync(new Uint8Array(buffer));
-
-    function extractTexts(xml) {
-      const matches = [...xml.matchAll(/<t[^>]*>([^<]*)<\/t>/g)];
-      return matches.map(m => m[1]);
+    // Parse Daily format: col0=FDX ID, col1=First Name, col2=Last Name, col3=Driver Status
+    const zipD = fflate.unzipSync(new Uint8Array(buffer));
+    const strD = zipD['xl/sharedStrings.xml'];
+    const shtD = zipD['xl/worksheets/sheet1.xml'];
+    if (!shtD) throw new Error('Invalid Daily xlsx format');
+    const sharedD = strD ? [...Buffer.from(strD).toString('utf8').matchAll(/<t[^>]*>([^<]*)<\/t>/g)].map(m=>m[1]) : [];
+    const rowsD = [...Buffer.from(shtD).toString('utf8').matchAll(/<row[^>]*>(.*?)<\/row>/gs)].map(row=>
+      [...row[1].matchAll(/<c\s([^>]*)>(.*?)<\/c>/gs)].map(cell=>({
+        t:(cell[1].match(/t="([^"]*)"/)|| [])[1],
+        v:(cell[2].match(/<v>([^<]*)<\/v>/)|| [])[1]
+      }))
+    );
+    function getDCell(row,idx){
+      if(idx<0||idx>=row.length)return'';
+      const c=row[idx];if(!c||c.v===undefined)return'';
+      return c.t==='s'?(sharedD[parseInt(c.v)]||''):(c.v||'');
     }
-
-    function extractCells(xml) {
-      const rows = [...xml.matchAll(/<row[^>]*>(.*?)<\/row>/gs)];
-      return rows.map(row => {
-        const cells = [...row[1].matchAll(/<c\s([^>]*)>(.*?)<\/c>/gs)];
-        return cells.map(cell => {
-          const attrs = cell[1];
-          const inner = cell[2];
-          const t = (attrs.match(/t="([^"]*)"/) || [])[1];
-          const v = (inner.match(/<v>([^<]*)<\/v>/) || [])[1];
-          return { t, v };
-        });
-      });
-    }
-
-    // already handled above
-    if (!sheetEntry) throw new Error('Invalid xlsx format');
-
-    const shared = stringsEntry ? extractTexts(stringsEntry) : [];
-    const sheetData = sheetEntry;
-    const allRows = extractCells(sheetData);
-
-    if (allRows.length < 2) return res.status(400).json({ error: 'No data in file' });
-
-    const headers = allRows[0].map(c => {
-      if (c.t === 's' && c.v !== undefined) return shared[parseInt(c.v)] || '';
-      return c.v || '';
-    });
-
-    const fdxIdx = headers.findIndex(h => h.toLowerCase().includes('fdx') || h.toLowerCase().includes('fedex'));
-    const firstIdx = headers.findIndex(h => h.toLowerCase().includes('first'));
-    const lastIdx = headers.findIndex(h => h.toLowerCase().includes('last'));
-    const statusIdx = headers.findIndex(h => h.toLowerCase().includes('status'));
-
-    const drivers = allRows.slice(1).map(row => {
-      function getCell(idx) {
-        if (idx < 0 || idx >= row.length) return '';
-        const c = row[idx];
-        if (!c || c.v === undefined) return '';
-        if (c.t === 's') return shared[parseInt(c.v)] || '';
-        return c.v || '';
-      }
-      return {
-        fdxId: getCell(fdxIdx),
-        firstName: getCell(firstIdx),
-        lastName: getCell(lastIdx),
-        status: getCell(statusIdx)
-      };
-    }).filter(d => d.fdxId || d.firstName || d.lastName);
+    const drivers = rowsD.slice(1).map(row=>({
+      fdxId: getDCell(row,0),
+      firstName: getDCell(row,1),
+      lastName: getDCell(row,2),
+      status: getDCell(row,3)
+    })).filter(d=>d.fdxId||d.firstName||d.lastName);
 
     res.json({
       account,
@@ -546,12 +512,14 @@ app.get('/api/dispatch', requireAuth(['admin', 'staff']), async (req, res) => {
     const listRes = await fetch(`${TOMCAT_BASE}/dispatch/index.json`);
     if (!listRes.ok) throw new Error('Could not reach dispatch server');
     const allFiles = await listRes.json();
-    const fileMatches = allFiles.filter(f => f.includes('partial') && f.endsWith('.xlsx'));
+    const fileMatches = allFiles.filter(f => f.includes('Daily') && f.endsWith('.xlsx'));
 
     // Group by account number and get latest per account
     const accounts = {};
     fileMatches.forEach(f => {
-      const acct = f.match(/^(\d+[A-Z]+)/)?.[1];
+      // Daily files: fedexloginid+timestamp-Daily.xlsx e.g. 70642892026-04-30-...
+      // Extract just the login ID part (digits before the date)
+      const acct = f.match(/^(\d+?)\d{4}-\d{2}-/)?.[1] || f.match(/^([\w]+)/)?.[1];
       if (acct) {
         if (!accounts[acct] || f > accounts[acct]) accounts[acct] = f;
       }

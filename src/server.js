@@ -341,16 +341,16 @@ async function parseXlsxFromBuffer(buffer) {
   if (!shtEntry) throw new Error('Invalid xlsx format');
   const shared = strEntry ? extractTexts(Buffer.from(strEntry).toString('utf8')) : [];
   const allRows = extractCells(Buffer.from(shtEntry).toString('utf8'));
-  if (allRows.length < 2) throw new Error('No data rows found');
-  // Build headers using cell references directly from header row cells
+  if (allRows.length < 3) throw new Error('No data rows found');
+  // Row 0 is a group header ('Client Data', 'FedEx Data', 'First Advantage Data')
+  // Row 1 is the real column headers — row 2+ is driver data
   const headers = [];
-  const headerCells = allRows[0];
+  const headerCells = allRows[1];
   for (let i = 0; i < 40; i++) {
     const c = headerCells[i];
     headers[i] = c ? (c.t === 's' && c.v !== undefined ? (shared[parseInt(c.v)] || '') : (c.v || '')) : '';
   }
   console.log('Headers 0-5:', headers.slice(0,6));
-  console.log('Shared 0-5:', shared.slice(0,6));
   function getCell(row, idx) {
     if (idx < 0) return '';
     const c = row[idx];
@@ -397,7 +397,7 @@ async function parseXlsxFromBuffer(buffer) {
     fadvMec: headers.findIndex(h => h.toLowerCase().includes('fec mec')),
     fadvCert: headers.findIndex(h => h.toLowerCase().includes('fec training'))
   };
-  const drivers = allRows.slice(1).map(row => ({
+  const drivers = allRows.slice(2).map(row => ({
     fn: getCell(row,cols.firstName), ln: getCell(row,cols.lastName),
     state: getCell(row,cols.state), fdxId: getCell(row,cols.fdxId),
     mgb: {

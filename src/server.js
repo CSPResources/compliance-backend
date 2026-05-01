@@ -248,17 +248,22 @@ app.post('/api/dispatch/parse', requireAuth(['admin', 'staff', 'client']), uploa
       return matches.map(m => m[1]);
     }
 
+    function colToIdx2(ref) {
+      const col = (ref.match(/^([A-Z]+)/) || [])[1] || 'A';
+      let idx = 0;
+      for (let i = 0; i < col.length; i++) idx = idx * 26 + col.charCodeAt(i) - 64;
+      return idx - 1;
+    }
     function extractCells(xml) {
-      const rows = [...xml.matchAll(/<row[^>]*>(.*?)<\/row>/gs)];
-      return rows.map(row => {
-        const cells = [...row[1].matchAll(/<c\s([^>]*)>(.*?)<\/c>/gs)];
-        return cells.map(cell => {
-          const attrs = cell[1];
-          const inner = cell[2];
-          const t = (attrs.match(/t="([^"]*)"/) || [])[1];
-          const v = (inner.match(/<v>([^<]*)<\/v>/) || [])[1];
-          return { t, v };
-        });
+      return [...xml.matchAll(/<row[^>]*>(.*?)<\/row>/gs)].map(rowM => {
+        const cells = [...rowM[1].matchAll(/<c\s([^>]*)>(.*?)<\/c>/gs)].map(cell => ({
+          r: (cell[1].match(/r="([^"]*)"/) || [])[1] || '',
+          t: (cell[1].match(/t="([^"]*)"/) || [])[1],
+          v: (cell[2].match(/<v>([^<]*)<\/v>/) || [])[1]
+        }));
+        const pos = [];
+        cells.forEach(c => { pos[colToIdx2(c.r)] = { t: c.t, v: c.v }; });
+        return pos;
       });
     }
 
@@ -310,13 +315,26 @@ async function parseXlsxFromBuffer(buffer) {
   function extractTexts(xml) {
     return [...xml.matchAll(/<t[^>]*>([^<]*)<\/t>/g)].map(m => m[1]);
   }
+  function colToIdx(ref) {
+    // Convert cell reference like "A1", "B2", "AA1" to 0-based column index
+    const col = (ref.match(/^([A-Z]+)/) || [])[1] || 'A';
+    let idx = 0;
+    for (let i = 0; i < col.length; i++) {
+      idx = idx * 26 + col.charCodeAt(i) - 64;
+    }
+    return idx - 1;
+  }
   function extractCells(xml) {
-    return [...xml.matchAll(/<row[^>]*>(.*?)<\/row>/gs)].map(row =>
-      [...row[1].matchAll(/<c\s([^>]*)>(.*?)<\/c>/gs)].map(cell => ({
+    return [...xml.matchAll(/<row[^>]*>(.*?)<\/row>/gs)].map(rowMatch => {
+      const cells = [...rowMatch[1].matchAll(/<c\s([^>]*)>(.*?)<\/c>/gs)].map(cell => ({
+        r: (cell[1].match(/r="([^"]*)"/) || [])[1] || '',
         t: (cell[1].match(/t="([^"]*)"/) || [])[1],
         v: (cell[2].match(/<v>([^<]*)<\/v>/) || [])[1]
-      }))
-    );
+      }));
+      const positioned = [];
+      cells.forEach(cell => { positioned[colToIdx(cell.r)] = { t: cell.t, v: cell.v }; });
+      return positioned;
+    });
   }
   const strEntry = zipData['xl/sharedStrings.xml'];
   const shtEntry = zipData['xl/worksheets/sheet1.xml'];
@@ -505,12 +523,22 @@ app.get('/api/dispatch/:accountNumber', requireAuth(['admin', 'staff', 'client']
     const shtD = zipD['xl/worksheets/sheet1.xml'];
     if (!shtD) throw new Error('Invalid Daily xlsx format');
     const sharedD = strD ? [...Buffer.from(strD).toString('utf8').matchAll(/<t[^>]*>([^<]*)<\/t>/g)].map(m=>m[1]) : [];
-    const rowsD = [...Buffer.from(shtD).toString('utf8').matchAll(/<row[^>]*>(.*?)<\/row>/gs)].map(row=>
-      [...row[1].matchAll(/<c\s([^>]*)>(.*?)<\/c>/gs)].map(cell=>({
+    function colToIdxD(ref) {
+      const col = (ref.match(/^([A-Z]+)/) || [])[1] || 'A';
+      let idx = 0;
+      for (let i = 0; i < col.length; i++) idx = idx * 26 + col.charCodeAt(i) - 64;
+      return idx - 1;
+    }
+    const rowsD = [...Buffer.from(shtD).toString('utf8').matchAll(/<row[^>]*>(.*?)<\/row>/gs)].map(row=>{
+      const cells=[...row[1].matchAll(/<c\s([^>]*)>(.*?)<\/c>/gs)].map(cell=>({
+        r:(cell[1].match(/r="([^"]*)"/)|| [])[1]||'',
         t:(cell[1].match(/t="([^"]*)"/)|| [])[1],
         v:(cell[2].match(/<v>([^<]*)<\/v>/)|| [])[1]
-      }))
-    );
+      }));
+      const r=[];
+      cells.forEach(c=>{r[colToIdxD(c.r)]={t:c.t,v:c.v};});
+      return r;
+    });
     function getDCell(row,idx){
       if(idx<0||idx>=row.length)return'';
       const c=row[idx];if(!c||c.v===undefined)return'';

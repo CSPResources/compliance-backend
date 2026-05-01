@@ -342,9 +342,13 @@ async function parseXlsxFromBuffer(buffer) {
   const shared = strEntry ? extractTexts(Buffer.from(strEntry).toString('utf8')) : [];
   const allRows = extractCells(Buffer.from(shtEntry).toString('utf8'));
   if (allRows.length < 2) throw new Error('No data rows found');
-  const maxCols = Math.max(...allRows[0].map((_, i) => i).filter(i => allRows[0][i] !== undefined), 27) + 1;
-  const headerRow = Array.from({length: maxCols}, (_, i) => allRows[0][i]);
-  const headers = headerRow.map(c => c && c.t === 's' && c.v !== undefined ? (shared[parseInt(c.v)] || '') : (c && c.v ? c.v : ''));
+  // Build headers using cell references directly from header row cells
+  const headers = [];
+  const headerCells = allRows[0];
+  for (let i = 0; i < 40; i++) {
+    const c = headerCells[i];
+    headers[i] = c ? (c.t === 's' && c.v !== undefined ? (shared[parseInt(c.v)] || '') : (c.v || '')) : '';
+  }
   function getCell(row, idx) {
     if (idx < 0) return '';
     const c = row[idx];
@@ -354,26 +358,44 @@ async function parseXlsxFromBuffer(buffer) {
   function findCol(keywords) {
     return headers.findIndex(h => keywords.some(k => h.toLowerCase().includes(k.toLowerCase())));
   }
-  const fedexIdIndices = headers.reduce((acc,h,i) => { if(h.toLowerCase()==='fedex id') acc.push(i); return acc; }, []);
-  const dotStateIndices = headers.reduce((acc,h,i) => { if(h.toLowerCase()==='dot state') acc.push(i); return acc; }, []);
-  // Hardcoded exact column indices from known file structure:
-  // 0:First Name, 1:Last Name, 2:State, 3:FDX ID, 4:FedEx ID, 5:FedEx Site ID
-  // 6:DOT State, 7:DOT Expiration, 8:Driver Name, 9:Company
-  // 10:Domicile Station ID, 11:Associated Station ID, 12:Workforce Doc Status
-  // 13:SIG Expiration Date, 14:Driver Status, 15:MVR Expiration Date
-  // 16:Med Card Expiration Date, 17:CDAS Status
-  // 18:FedEx ID(FADV), 19:FA ID, 20:Full Name, 21:DOT ID, 22:DOT State(FADV)
-  // 23:Job Status, 24:Job Title, 25:FEC MVR expires, 26:FEC MEC expires, 27:FEC Training CERT expires
+  // Dynamic column detection using header names
+  const fedexIdIndices2 = [];
+  const dotStateIndices2 = [];
+  headers.forEach((h, i) => {
+    if (h.toLowerCase() === 'fedex id') fedexIdIndices2.push(i);
+    if (h.toLowerCase() === 'dot state') dotStateIndices2.push(i);
+  });
   const cols = {
-    firstName: 0, lastName: 1, state: 2, fdxId: 3,
-    fedexId: 4, fedexSiteId: 5, dotState: 6, dotExp: 7,
-    driverName: 8, company: 9, domStation: 10, assocStation: 11,
-    workforceStatus: 12, sigExp: 13, driverStatus: 14, mvrExp: 15,
-    medExp: 16, cdas: 17,
-    faFedexId: 18, faId: 19, faName: 20, dotId: 21,
-    fadvDotState: 22, jobStatus: 23, jobTitle: 24,
-    fadvMvr: 25, fadvMec: 26, fadvCert: 27
+    firstName: headers.findIndex(h => h.toLowerCase() === 'first name'),
+    lastName: headers.findIndex(h => h.toLowerCase() === 'last name'),
+    state: headers.findIndex(h => h.toLowerCase() === 'state'),
+    fdxId: headers.findIndex(h => h.toLowerCase() === 'fdx id'),
+    fedexId: fedexIdIndices2[0] ?? -1,
+    fedexSiteId: headers.findIndex(h => h.toLowerCase() === 'fedex site id'),
+    dotState: dotStateIndices2[0] ?? -1,
+    dotExp: headers.findIndex(h => h.toLowerCase().includes('dot expiration')),
+    driverName: headers.findIndex(h => h.toLowerCase() === 'driver name'),
+    company: headers.findIndex(h => h.toLowerCase() === 'company'),
+    domStation: headers.findIndex(h => h.toLowerCase().includes('domicile station')),
+    assocStation: headers.findIndex(h => h.toLowerCase().includes('associated station')),
+    workforceStatus: headers.findIndex(h => h.toLowerCase().includes('workforce')),
+    sigExp: headers.findIndex(h => h.toLowerCase().includes('sig expiration')),
+    driverStatus: headers.findIndex(h => h.toLowerCase() === 'driver status'),
+    mvrExp: headers.findIndex(h => h.toLowerCase().includes('mvr expiration')),
+    medExp: headers.findIndex(h => h.toLowerCase().includes('med card')),
+    cdas: headers.findIndex(h => h.toLowerCase().includes('cdas')),
+    faFedexId: fedexIdIndices2[1] ?? -1,
+    faId: headers.findIndex(h => h.toLowerCase() === 'fa id'),
+    faName: headers.findIndex(h => h.toLowerCase() === 'full name'),
+    dotId: headers.findIndex(h => h.toLowerCase() === 'dot id'),
+    fadvDotState: dotStateIndices2[1] ?? -1,
+    jobStatus: headers.findIndex(h => h.toLowerCase() === 'job status'),
+    jobTitle: headers.findIndex(h => h.toLowerCase() === 'job title'),
+    fadvMvr: headers.findIndex(h => h.toLowerCase().includes('fec mvr')),
+    fadvMec: headers.findIndex(h => h.toLowerCase().includes('fec mec')),
+    fadvCert: headers.findIndex(h => h.toLowerCase().includes('fec training'))
   };
+  console.log('Detected cols:', JSON.stringify(cols));
   const drivers = allRows.slice(1).map(row => ({
     fn: getCell(row,cols.firstName), ln: getCell(row,cols.lastName),
     state: getCell(row,cols.state), fdxId: getCell(row,cols.fdxId),

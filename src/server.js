@@ -342,10 +342,13 @@ async function parseXlsxFromBuffer(buffer) {
   const shared = strEntry ? extractTexts(Buffer.from(strEntry).toString('utf8')) : [];
   const allRows = extractCells(Buffer.from(shtEntry).toString('utf8'));
   if (allRows.length < 2) throw new Error('No data rows found');
-  const headers = allRows[0].map(c => c.t === 's' && c.v !== undefined ? (shared[parseInt(c.v)] || '') : (c.v || ''));
+  const maxCols = Math.max(...allRows[0].map((_, i) => i).filter(i => allRows[0][i] !== undefined), 27) + 1;
+  const headerRow = Array.from({length: maxCols}, (_, i) => allRows[0][i]);
+  const headers = headerRow.map(c => c && c.t === 's' && c.v !== undefined ? (shared[parseInt(c.v)] || '') : (c && c.v ? c.v : ''));
   function getCell(row, idx) {
-    if (idx < 0 || idx >= row.length) return '';
-    const c = row[idx]; if (!c || c.v === undefined) return '';
+    if (idx < 0) return '';
+    const c = row[idx];
+    if (!c || c.v === undefined || c.v === null) return '';
     return c.t === 's' ? (shared[parseInt(c.v)] || '') : (c.v || '');
   }
   function findCol(keywords) {

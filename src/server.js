@@ -434,6 +434,31 @@ app.get('/api/compliance/auto/:accountNumber', requireAuth(['admin','staff','cli
 // ── Dispatch Auto-Fetch ───────────────────────────────────────────────────────
 const TOMCAT_BASE = 'https://tomcat-j018.onrender.com';
 
+// FedEx login ID to account number mapping
+const FEDEX_ID_MAP = {
+  '70642892': '042443GCR',
+  '8462973':  '042443MOK',
+  '5760589':  '042443RQY',
+  '8172692':  '042443BZN',
+  '042443BZN':'042443BZN',
+  '042443GCR':'042443GCR',
+  '042443MOK':'042443MOK',
+  '042443RQY':'042443RQY',
+};
+
+function resolveAccount(fileOrId) {
+  // Try direct match first
+  const upper = fileOrId.toUpperCase();
+  for (const [id, acct] of Object.entries(FEDEX_ID_MAP)) {
+    if (upper.startsWith(id.toUpperCase())) return acct;
+  }
+  // Try matching 042443XXX pattern directly
+  const direct = fileOrId.match(/^(042443[A-Z]+)/i)?.[1]?.toUpperCase();
+  if (direct) return direct;
+  // Return the raw ID if no mapping found
+  return fileOrId.match(/^([\w]+?)\d{4}-/)?.[1] || fileOrId.split('-')[0];
+}
+
 // GET /api/dispatch/:accountNumber — fetch latest partial file for account
 app.get('/api/dispatch/:accountNumber', requireAuth(['admin', 'staff', 'client']), async (req, res) => {
   const account = req.params.accountNumber.toUpperCase();
@@ -453,8 +478,12 @@ app.get('/api/dispatch/:accountNumber', requireAuth(['admin', 'staff', 'client']
     const allFiles = await listRes.json();
 
     // Filter to Daily files for this account, newest first
+    // Account may be a friendly name like 042443GCR, so match via FEDEX_ID_MAP
     const accountFiles = allFiles
-      .filter(f => f.includes('Daily') && f.endsWith('.xlsx') && f.toUpperCase().startsWith(account))
+      .filter(f => {
+        if (!f.includes('Daily') || !f.endsWith('.xlsx')) return false;
+        return resolveAccount(f).toUpperCase() === account.toUpperCase();
+      })
       .sort().reverse();
 
     if (accountFiles.length === 0) {

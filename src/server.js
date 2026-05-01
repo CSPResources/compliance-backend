@@ -341,15 +341,22 @@ async function parseXlsxFromBuffer(buffer) {
   if (!shtEntry) throw new Error('Invalid xlsx format');
   const shared = strEntry ? extractTexts(Buffer.from(strEntry).toString('utf8')) : [];
   const allRows = extractCells(Buffer.from(shtEntry).toString('utf8'));
-  if (allRows.length < 3) throw new Error('No data rows found');
-  // Row 0 is a group header ('Client Data', 'FedEx Data', 'First Advantage Data')
-  // Row 1 is the real column headers — row 2+ is driver data
-  const headers = [];
-  const headerCells = allRows[1];
-  for (let i = 0; i < 40; i++) {
-    const c = headerCells[i];
-    headers[i] = c ? (c.t === 's' && c.v !== undefined ? (shared[parseInt(c.v)] || '') : (c.v || '')) : '';
+  if (allRows.length < 2) throw new Error('No data rows found');
+  // Some files have a group header row 0 ('Client Data', 'FedEx Data'...) before the real column headers.
+  // Auto-detect: if row 0 contains 'first name', it IS the header row; otherwise skip to row 1.
+  function readHeaders(rowCells) {
+    const h = [];
+    for (let i = 0; i < 40; i++) {
+      const c = rowCells[i];
+      h[i] = c ? (c.t === 's' && c.v !== undefined ? (shared[parseInt(c.v)] || '') : (c.v || '')) : '';
+    }
+    return h;
   }
+  const row0Headers = readHeaders(allRows[0]);
+  const hasRealHeaders = row0Headers.some(h => h.toLowerCase() === 'first name');
+  const headerRowIdx = hasRealHeaders ? 0 : 1;
+  const dataStartIdx = headerRowIdx + 1;
+  const headers = readHeaders(allRows[headerRowIdx]);
   console.log('Headers 0-5:', headers.slice(0,6));
   function getCell(row, idx) {
     if (idx < 0) return '';
@@ -397,7 +404,7 @@ async function parseXlsxFromBuffer(buffer) {
     fadvMec: headers.findIndex(h => h.toLowerCase().includes('fec mec')),
     fadvCert: headers.findIndex(h => h.toLowerCase().includes('fec training'))
   };
-  const drivers = allRows.slice(2).map(row => ({
+  const drivers = allRows.slice(dataStartIdx).map(row => ({
     fn: getCell(row,cols.firstName), ln: getCell(row,cols.lastName),
     state: getCell(row,cols.state), fdxId: getCell(row,cols.fdxId),
     mgb: {

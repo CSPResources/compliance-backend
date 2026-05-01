@@ -545,12 +545,10 @@ app.get('/api/dispatch', requireAuth(['admin', 'staff']), async (req, res) => {
     const allFiles = await listRes.json();
     const fileMatches = allFiles.filter(f => f.includes('Daily') && f.endsWith('.xlsx'));
 
-    // Group by account number and get latest per account
+    // Group by resolved account name
     const accounts = {};
     fileMatches.forEach(f => {
-      // Daily files: fedexloginid+timestamp-Daily.xlsx e.g. 70642892026-04-30-...
-      // Extract just the login ID part (digits before the date)
-      const acct = f.match(/^(\d+?)\d{4}-\d{2}-/)?.[1] || f.match(/^([\w]+)/)?.[1];
+      const acct = resolveAccount(f);
       if (acct) {
         if (!accounts[acct] || f > accounts[acct]) accounts[acct] = f;
       }

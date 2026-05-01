@@ -447,16 +447,18 @@ const FEDEX_ID_MAP = {
 };
 
 function resolveAccount(fileOrId) {
-  // Try direct match first
+  // Try all known mappings first (longest match first to avoid partial matches)
   const upper = fileOrId.toUpperCase();
-  for (const [id, acct] of Object.entries(FEDEX_ID_MAP)) {
+  const sortedMap = Object.entries(FEDEX_ID_MAP).sort((a,b) => b[0].length - a[0].length);
+  for (const [id, acct] of sortedMap) {
     if (upper.startsWith(id.toUpperCase())) return acct;
   }
   // Try matching 042443XXX pattern directly
   const direct = fileOrId.match(/^(042443[A-Z]+)/i)?.[1]?.toUpperCase();
   if (direct) return direct;
-  // Return the raw ID if no mapping found
-  return fileOrId.match(/^([\w]+?)\d{4}-/)?.[1] || fileOrId.split('-')[0];
+  // Extract full ID before the date pattern YYYY-MM-DD
+  const rawId = fileOrId.match(/^(.+?)(?=\d{4}-\d{2}-\d{2})/)?.[1]?.replace(/-$/, '');
+  return rawId || fileOrId.split('-')[0];
 }
 
 // GET /api/dispatch/:accountNumber — fetch latest partial file for account

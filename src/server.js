@@ -396,6 +396,12 @@ async function parseXlsxFromBuffer(buffer) {
     fadvCert: headers.findIndex(h => h.toLowerCase().includes('fec training'))
   };
   console.log('Detected cols:', JSON.stringify(cols));
+  // Debug first row
+  if (allRows.length > 1) {
+    const debugRow = allRows[1];
+    console.log('Row 1 positions 0-5:', JSON.stringify([debugRow[0], debugRow[1], debugRow[2], debugRow[3], debugRow[4], debugRow[5]]));
+    console.log('getCell(row,0):', getCell(debugRow, 0), 'getCell(row,1):', getCell(debugRow, 1), 'getCell(row,2):', getCell(debugRow, 2));
+  }
   const drivers = allRows.slice(1).map(row => ({
     fn: getCell(row,cols.firstName), ln: getCell(row,cols.lastName),
     state: getCell(row,cols.state), fdxId: getCell(row,cols.fdxId),
